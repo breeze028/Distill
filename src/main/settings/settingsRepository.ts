@@ -8,7 +8,8 @@ const defaults: AppSettings = {
   deepSeekModel: 'deepseek-chat',
   watchFolder: '',
   speechProvider: process.env.DISTILL_STT_PROVIDER === 'python' ? 'python' : 'mock',
-  speechModel: 'faster-whisper-small'
+  speechModel: 'faster-whisper-small',
+  autoTranscribeOnImport: true
 };
 
 export class SettingsRepository {
@@ -24,7 +25,8 @@ export class SettingsRepository {
       deepSeekModel: values.deepSeekModel ?? defaults.deepSeekModel,
       watchFolder: values.watchFolder ?? defaults.watchFolder,
       speechProvider: values.speechProvider === 'python' ? 'python' : values.speechProvider === 'mock' ? 'mock' : defaults.speechProvider,
-      speechModel: values.speechModel ?? defaults.speechModel
+      speechModel: values.speechModel ?? defaults.speechModel,
+      autoTranscribeOnImport: values.autoTranscribeOnImport === undefined ? defaults.autoTranscribeOnImport : values.autoTranscribeOnImport === 'true'
     };
   }
 
@@ -39,7 +41,7 @@ export class SettingsRepository {
     const write = this.db.transaction(() => {
       for (const [key, value] of Object.entries(input)) {
         if (value !== undefined) {
-          save.run(key, value, now);
+          save.run(key, String(value), now);
         }
       }
     });

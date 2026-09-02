@@ -26,6 +26,7 @@ type LibraryState = {
   showSettings(): Promise<void>;
   saveSettings(settings: Parameters<typeof window.distillAPI.saveSettings>[0]): Promise<void>;
   refreshSpeechToTextStatus(): Promise<void>;
+  pollRecordingUntilIdle(id: string): Promise<void>;
 };
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
@@ -79,6 +80,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       if (result) {
         const recordings = await window.distillAPI.listRecordings();
         set({ recordings, selectedRecording: result.recording });
+        if (hasRunningTranscription(result.recording)) {
+          void get().pollRecordingUntilIdle(result.recording.id);
+        }
       }
     } catch (error) {
       set({ error: toMessage(error) });
@@ -93,6 +97,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       const result = await window.distillAPI.importRecordingFromPath(filePath);
       const recordings = await window.distillAPI.listRecordings();
       set({ recordings, selectedRecording: result.recording });
+      if (hasRunningTranscription(result.recording)) {
+        void get().pollRecordingUntilIdle(result.recording.id);
+      }
     } catch (error) {
       set({ error: toMessage(error) });
     } finally {
@@ -186,9 +193,48 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     } finally {
       set({ checkingSpeechToText: false });
     }
+  },
+
+  async pollRecordingUntilIdle(id) {
+    set((state) => ({
+      transcribingIds: { ...state.transcribingIds, [id]: true }
+    }));
+
+    try {
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        await delay(1000);
+        const [recording, recordings] = await Promise.all([
+          window.distillAPI.getRecording(id),
+          window.distillAPI.listRecordings()
+        ]);
+        set({
+          recordings,
+          selectedRecording: get().selectedRecording?.id === id ? recording : get().selectedRecording
+        });
+
+        if (!recording || !hasRunningTranscription(recording)) {
+          break;
+        }
+      }
+    } catch (error) {
+      set({ error: toMessage(error) });
+    } finally {
+      set((state) => {
+        const { [id]: _finished, ...remaining } = state.transcribingIds;
+        return { transcribingIds: remaining };
+      });
+    }
   }
 }));
 
 function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong.';
+}
+
+function hasRunningTranscription(recording: RecordingDetail): boolean {
+  return recording.jobs.some((job) => job.kind === 'transcription' && job.state === 'running');
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

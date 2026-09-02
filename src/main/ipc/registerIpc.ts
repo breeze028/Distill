@@ -1,5 +1,6 @@
 import { dialog, ipcMain } from 'electron';
 import { ipcChannels } from '@shared/ipc';
+import type { ImportRecordingResult } from '@shared/types/domain';
 import { importRecordingRequestSchema, saveSettingsRequestSchema } from '@shared/schemas/ipc';
 import type { FileImportService } from '@main/services/fileImportService';
 import type { TranscriptionService } from '@main/services/transcriptionService';
@@ -18,6 +19,18 @@ export function registerIpcHandlers(dependencies: {
 
   ipcMain.handle(ipcChannels.recordingsGet, (_event, id: string) => dependencies.recordings.getRecording(id));
 
+  async function importAndMaybeTranscribe(filePath: string): Promise<ImportRecordingResult> {
+    const result = await dependencies.importer.importFile(filePath);
+    if (result.wasDuplicate || !dependencies.settings.getSettings().autoTranscribeOnImport) {
+      return result;
+    }
+
+    return {
+      ...result,
+      recording: dependencies.transcriber.startTranscription(result.recording.id)
+    };
+  }
+
   ipcMain.handle(ipcChannels.recordingsImportDialog, async () => {
     const result = await dialog.showOpenDialog({
       title: 'Import Recording',
@@ -29,12 +42,12 @@ export function registerIpcHandlers(dependencies: {
       return null;
     }
 
-    return dependencies.importer.importFile(result.filePaths[0]);
+    return importAndMaybeTranscribe(result.filePaths[0]);
   });
 
   ipcMain.handle(ipcChannels.recordingsImportPath, (_event, input: unknown) => {
     const parsed = importRecordingRequestSchema.parse(input);
-    return dependencies.importer.importFile(parsed.filePath);
+    return importAndMaybeTranscribe(parsed.filePath);
   });
 
   ipcMain.handle(ipcChannels.recordingsTranscribe, (_event, id: string) => dependencies.transcriber.transcribeRecording(id));

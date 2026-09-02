@@ -33,6 +33,13 @@ async function main() {
     appMenuRemoved = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null);
 
     imported = await win.evaluate((filePath) => window.distillAPI.importRecordingFromPath(filePath), audio);
+    await win.waitForFunction(
+      async (recordingId) => {
+        const recording = await window.distillAPI.getRecording(recordingId);
+        return Boolean(recording?.transcript?.segments.length);
+      },
+      imported.recording.id
+    );
     await win.evaluate(() => window.location.reload());
     await win.waitForLoadState('domcontentloaded');
     await win.waitForTimeout(1000);
@@ -48,7 +55,6 @@ async function main() {
     await win.getByText('Watch Folder', { exact: true }).waitFor();
     await win.getByRole('button', { name: 'Inbox' }).click();
     await win.getByText('phase1-transcript-中文-test').first().waitFor();
-    await win.getByRole('button', { name: 'Transcribe Recording', exact: true }).click();
     await win.getByText('这是第一阶段的模拟转写', { exact: false }).waitFor();
     await win.getByText('后续会由 Python Worker', { exact: false }).click();
     await win.waitForTimeout(500);
@@ -98,6 +104,7 @@ async function main() {
         hasLibraryText: text.includes('Voice Library'),
         hasDetailText: text.includes('phase1-transcript-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
+        autoTranscribedAfterImport: Boolean(imported.recording.jobs.find((job) => job.kind === 'transcription')),
         hasTranscriptText: text.includes('这是第一阶段的模拟转写'),
         hasPersistedTranscriptAfterReopen: reopenedText.includes('这是第一阶段的模拟转写')
       },
@@ -129,6 +136,9 @@ async function main() {
   }
   if (!settingsText.includes('Mock STT ready')) {
     throw new Error('Speech-to-text status was not visible in settings.');
+  }
+  if (!imported.recording.jobs.some((job) => job.kind === 'transcription')) {
+    throw new Error('Expected import to start a transcription job automatically.');
   }
   if (!text.includes('这是第一阶段的模拟转写')) {
     throw new Error('Transcript segment text was not visible after transcription.');

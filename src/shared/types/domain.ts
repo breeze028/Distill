@@ -83,6 +83,7 @@ export type AppSettings = {
   watchFolder: string;
   speechProvider: SpeechToTextProvider;
   speechModel: string;
+  autoTranscribeOnImport: boolean;
 };
 
 export type SpeechToTextProvider = 'mock' | 'python';

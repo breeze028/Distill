@@ -55,6 +55,23 @@ describe('TranscriptionService', () => {
     expect(job?.state).toBe('failed');
     expect(job?.errorMessage).toBe('mock STT failed');
   });
+
+  it('starts transcription in the background for import workflows', async () => {
+    const repository = new RecordingRepository(dbManager.open());
+    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }));
+    const filePath = path.join(tmpDir, '自动转写.m4a');
+    fs.writeFileSync(filePath, Buffer.from('fake-audio'));
+    const imported = await importer.importFile(filePath);
+    const service = new TranscriptionService(repository, new DelayedStt());
+
+    const started = service.startTranscription(imported.recording.id);
+
+    expect(started.jobs.find((job) => job.kind === 'transcription')?.state).toBe('running');
+
+    const detail = await waitForTranscript(repository, imported.recording.id);
+    expect(detail.processingState).toBe('succeeded');
+    expect(detail.transcript?.fullText).toContain('后台转写完成');
+  });
 });
 
 class SuccessfulStt implements SpeechToTextService {
@@ -84,6 +101,23 @@ class FailingStt implements SpeechToTextService {
   }
 }
 
+class DelayedStt implements SpeechToTextService {
+  async transcribe(): Promise<SpeechToTextResult> {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return {
+      language: 'zh',
+      duration: 6,
+      segments: [
+        { start: 0, end: 6, text: '后台转写完成。' }
+      ]
+    };
+  }
+
+  async getStatus() {
+    return mockStatus();
+  }
+}
+
 function mockStatus() {
   return {
     provider: 'mock' as const,
@@ -99,4 +133,15 @@ function mockStatus() {
     errorMessage: null,
     setupHint: null
   };
+}
+
+async function waitForTranscript(repository: RecordingRepository, recordingId: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const detail = repository.getRecording(recordingId);
+    if (detail?.transcript) {
+      return detail;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('Timed out waiting for transcript.');
 }

@@ -423,6 +423,7 @@ function SettingsPane(props: {
   const [model, setModel] = useState(props.settings?.deepSeekModel ?? 'deepseek-chat');
   const [speechProvider, setSpeechProvider] = useState(props.settings?.speechProvider ?? 'mock');
   const [speechModel, setSpeechModel] = useState(props.settings?.speechModel ?? 'faster-whisper-small');
+  const [autoTranscribeOnImport, setAutoTranscribeOnImport] = useState(props.settings?.autoTranscribeOnImport ?? true);
   const [apiKey, setApiKey] = useState('');
 
   useEffect(() => {
@@ -430,6 +431,7 @@ function SettingsPane(props: {
     setModel(props.settings?.deepSeekModel ?? 'deepseek-chat');
     setSpeechProvider(props.settings?.speechProvider ?? 'mock');
     setSpeechModel(props.settings?.speechModel ?? 'faster-whisper-small');
+    setAutoTranscribeOnImport(props.settings?.autoTranscribeOnImport ?? true);
   }, [props.settings]);
 
   return (
@@ -454,6 +456,15 @@ function SettingsPane(props: {
         <Field label="Speech-to-Text Model">
           <Input value={speechModel} onChange={(event) => setSpeechModel(event.target.value)} />
         </Field>
+        <label className="flex items-center gap-3 text-sm">
+          <input
+            className="h-4 w-4 accent-accent"
+            type="checkbox"
+            checked={autoTranscribeOnImport}
+            onChange={(event) => setAutoTranscribeOnImport(event.target.checked)}
+          />
+          <span>Auto transcribe after import</span>
+        </label>
         <Field label="AI Provider">
           <Input value="deepseek" disabled />
         </Field>
@@ -466,7 +477,7 @@ function SettingsPane(props: {
         <Field label="Watch Folder">
           <Input value={watchFolder} placeholder="D:\\VoiceInbox" onChange={(event) => setWatchFolder(event.target.value)} />
         </Field>
-        <Button onClick={() => props.onSave({ deepSeekModel: model, speechProvider, speechModel, watchFolder, ...(apiKey ? { deepSeekApiKey: apiKey } : {}) })}>
+        <Button onClick={() => props.onSave({ deepSeekModel: model, speechProvider, speechModel, autoTranscribeOnImport, watchFolder, ...(apiKey ? { deepSeekApiKey: apiKey } : {}) })}>
           Save Settings
         </Button>
       </div>

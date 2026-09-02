@@ -56,6 +56,7 @@
 - 已建立 `TranscriptionService` 主干。
 - 已通过 `ProcessingJob` 记录转写任务状态。
 - 已打通手动触发转写、保存 `Transcript` 与 `TranscriptSegment`、UI 展示 segment 的流程。
+- 已支持导入后自动创建后台转写任务。
 - 已实现点击 Transcript Segment 后音频 seek 到 segment start time。
 - 已将 Python Worker 改为真实 faster-whisper 调用，并补充 worker 进程协议校验。
 - 已增加 Settings 中的 STT 环境状态检查入口。

@@ -10,7 +10,8 @@ export const saveSettingsRequestSchema = z.object({
   deepSeekModel: z.string().min(1).optional(),
   watchFolder: z.string().optional(),
   speechProvider: z.enum(['mock', 'python']).optional(),
-  speechModel: z.string().min(1).optional()
+  speechModel: z.string().min(1).optional(),
+  autoTranscribeOnImport: z.boolean().optional()
 });
 
 export type SaveSettingsRequest = z.infer<typeof saveSettingsRequestSchema>;

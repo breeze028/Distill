@@ -39,6 +39,8 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - 新增 `recordings:transcribe` IPC。
 - 新增手动触发转写按钮。
 - 转写流程会创建并更新 `ProcessingJob`。
+- 导入成功后会按设置自动创建后台转写任务。
+- Settings 中可控制是否导入后自动转写。
 - mock STT 转写结果会保存为 `Transcript` 和 `TranscriptSegment`。
 - Recording Detail 可以展示 transcript segment。
 - 点击 transcript segment 可以让音频 seek 到该句起始时间并播放。
@@ -86,6 +88,7 @@ pnpm dev
 - packaged app 导入真实 `.m4a`
 - 导入后持久化
 - 点击录音进入详情
+- 导入后自动触发 mock 转写
 - 手动触发 mock 转写
 - 转写后展示 transcript segment
 - transcript segment 文本可见
