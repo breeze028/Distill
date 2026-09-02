@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, FileAudio, FolderOpen, Import, Library, Search, Settings, Upload } from 'lucide-react';
-import type { RecordingDetail, RecordingListItem, TranscriptSegment } from '@shared/types/domain';
+import type { ProcessingJob, RecordingDetail, RecordingListItem, TranscriptSegment } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { cn } from '@renderer/lib/utils';
@@ -280,6 +280,8 @@ function RecordingDetailPane(props: {
     );
   }
   const recording = props.recording;
+  const transcriptionJob = getLatestTranscriptionJob(recording);
+  const transcriptionError = transcriptionJob?.state === 'failed' ? transcriptionJob : null;
 
   return (
     <article className="flex h-full min-w-0 flex-col">
@@ -315,6 +317,13 @@ function RecordingDetailPane(props: {
             {props.isTranscribing ? 'Transcribing...' : recording.transcript ? 'Retranscribe' : 'Transcribe Recording'}
           </Button>
         </div>
+        {transcriptionError ? (
+          <JobErrorNotice
+            job={transcriptionError}
+            disabled={props.isTranscribing}
+            onRetry={() => props.onTranscribe(recording.id)}
+          />
+        ) : null}
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,420px)_1fr]">
@@ -362,6 +371,27 @@ function RecordingDetailPane(props: {
       </div>
     </article>
   );
+}
+
+function JobErrorNotice(props: { job: ProcessingJob; disabled: boolean; onRetry(): void }) {
+  return (
+    <div className="mt-4 flex items-start justify-between gap-4 rounded border border-destructive/25 bg-destructive/10 px-3 py-3 text-sm text-destructive">
+      <div className="flex min-w-0 gap-2">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="min-w-0">
+          <div className="font-medium">Transcription failed</div>
+          <div className="mt-1 break-words text-destructive/80">{props.job.errorMessage ?? 'The speech-to-text worker failed.'}</div>
+        </div>
+      </div>
+      <Button variant="secondary" size="sm" onClick={props.onRetry} disabled={props.disabled}>
+        Retry
+      </Button>
+    </div>
+  );
+}
+
+function getLatestTranscriptionJob(recording: RecordingDetail): ProcessingJob | null {
+  return recording.jobs.find((job) => job.kind === 'transcription') ?? null;
 }
 
 function TranscriptRow(props: { segment: TranscriptSegment; onClick(): void }) {
