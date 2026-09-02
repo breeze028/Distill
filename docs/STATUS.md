@@ -89,6 +89,8 @@ pnpm dev
 - 手动触发 mock 转写
 - 转写后展示 transcript segment
 - transcript segment 文本可见
+- 重开打包应用后 transcript 仍然可见
+- 点击 transcript segment 会 seek 到对应音频时间点
 - audio element 加载到有效时长
 - Electron application menu 已移除
 - Inbox 和 Settings 可打开/收回
