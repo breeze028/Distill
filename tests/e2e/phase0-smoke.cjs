@@ -37,6 +37,8 @@ async function main() {
     await win.waitForTimeout(500);
     await win.getByRole('button', { name: 'Settings', exact: true }).click();
     await win.getByText('Speech-to-Text Model').waitFor();
+    await win.getByText('Mock STT ready').waitFor();
+    const settingsText = await win.locator('body').innerText();
     await win.getByRole('button', { name: 'Settings', exact: true }).click();
     await win.getByText('phase0-中文-test').first().waitFor();
     await win.getByRole('button', { name: 'Inbox' }).click();
@@ -72,6 +74,7 @@ async function main() {
           appMenuRemoved,
           hasLibraryText: text.includes('Voice Library'),
           hasDetailText: text.includes('phase0-中文-test'),
+          hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
           hasTranscriptText: text.includes('这是第一阶段的模拟转写')
         },
         null,
@@ -96,6 +99,9 @@ async function main() {
     }
     if (!text.includes('phase0-中文-test')) {
       throw new Error('Imported recording title was not visible.');
+    }
+    if (!settingsText.includes('Mock STT ready')) {
+      throw new Error('Speech-to-text status was not visible in settings.');
     }
     if (!text.includes('这是第一阶段的模拟转写')) {
       throw new Error('Transcript segment text was not visible after transcription.');

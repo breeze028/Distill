@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
@@ -8,7 +9,10 @@ from typing import Any
 def main() -> int:
     try:
         request = read_request()
-        result = transcribe(request)
+        if request.get("type") == "diagnose":
+            result = diagnose()
+        else:
+            result = transcribe(request)
     except WorkerError as error:
         print(json.dumps({"error": error.message, "detail": error.detail}, ensure_ascii=False), file=sys.stderr)
         return 1
@@ -30,7 +34,11 @@ def read_request() -> dict[str, Any]:
     except json.JSONDecodeError as error:
         raise WorkerError("Invalid JSON request", str(error)) from error
 
-    if request.get("type") != "transcribe":
+    request_type = request.get("type")
+    if request_type == "diagnose":
+        return request
+
+    if request_type != "transcribe":
         raise WorkerError("Unsupported request type")
 
     file_path = request.get("file")
@@ -41,6 +49,27 @@ def read_request() -> dict[str, Any]:
         raise WorkerError("Audio file does not exist", file_path)
 
     return request
+
+
+def diagnose() -> dict[str, Any]:
+    error_message = None
+    faster_whisper_available = True
+    faster_whisper_version = None
+
+    try:
+        import faster_whisper  # noqa: F401
+        faster_whisper_version = version("faster-whisper")
+    except (ImportError, PackageNotFoundError) as error:
+        faster_whisper_available = False
+        error_message = str(error)
+
+    return {
+        "pythonVersion": sys.version.split()[0],
+        "workerPath": str(Path(__file__).resolve()),
+        "fasterWhisperAvailable": faster_whisper_available,
+        "fasterWhisperVersion": faster_whisper_version,
+        "errorMessage": error_message,
+    }
 
 
 def transcribe(request: dict[str, Any]) -> dict[str, Any]:

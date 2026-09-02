@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppSettings, RecordingDetail, RecordingListItem } from '@shared/types/domain';
+import type { AppSettings, RecordingDetail, RecordingListItem, SpeechToTextStatus } from '@shared/types/domain';
 
 type ViewMode = 'library' | 'inbox' | 'settings';
 
@@ -7,10 +7,12 @@ type LibraryState = {
   recordings: RecordingListItem[];
   selectedRecording: RecordingDetail | null;
   settings: AppSettings | null;
+  speechToTextStatus: SpeechToTextStatus | null;
   query: string;
   viewMode: ViewMode;
   loading: boolean;
   importing: boolean;
+  checkingSpeechToText: boolean;
   transcribingIds: Record<string, boolean>;
   error: string | null;
   load(): Promise<void>;
@@ -23,27 +25,35 @@ type LibraryState = {
   showInbox(): Promise<void>;
   showSettings(): Promise<void>;
   saveSettings(settings: Parameters<typeof window.distillAPI.saveSettings>[0]): Promise<void>;
+  refreshSpeechToTextStatus(): Promise<void>;
 };
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   recordings: [],
   selectedRecording: null,
   settings: null,
+  speechToTextStatus: null,
   query: '',
   viewMode: 'library',
   loading: false,
   importing: false,
+  checkingSpeechToText: false,
   transcribingIds: {},
   error: null,
 
   async load() {
     set({ loading: true, error: null });
     try {
-      const [recordings, settings] = await Promise.all([window.distillAPI.listRecordings(), window.distillAPI.getSettings()]);
+      const [recordings, settings, speechToTextStatus] = await Promise.all([
+        window.distillAPI.listRecordings(),
+        window.distillAPI.getSettings(),
+        window.distillAPI.getSpeechToTextStatus()
+      ]);
       const selected = get().selectedRecording;
       set({
         recordings,
         settings,
+        speechToTextStatus,
         selectedRecording: selected && recordings.some((item) => item.id === selected.id) ? selected : null,
         loading: false
       });
@@ -144,8 +154,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ viewMode: nextMode, error: null });
     if (nextMode === 'settings') {
       try {
-        const settings = await window.distillAPI.getSettings();
-        set({ settings });
+        const [settings, speechToTextStatus] = await Promise.all([
+          window.distillAPI.getSettings(),
+          window.distillAPI.getSpeechToTextStatus()
+        ]);
+        set({ settings, speechToTextStatus });
       } catch (error) {
         set({ error: toMessage(error) });
       }
@@ -156,9 +169,22 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ error: null });
     try {
       const saved = await window.distillAPI.saveSettings(settings);
-      set({ settings: saved });
+      const speechToTextStatus = await window.distillAPI.getSpeechToTextStatus();
+      set({ settings: saved, speechToTextStatus });
     } catch (error) {
       set({ error: toMessage(error) });
+    }
+  },
+
+  async refreshSpeechToTextStatus() {
+    set({ checkingSpeechToText: true, error: null });
+    try {
+      const speechToTextStatus = await window.distillAPI.getSpeechToTextStatus();
+      set({ speechToTextStatus });
+    } catch (error) {
+      set({ error: toMessage(error) });
+    } finally {
+      set({ checkingSpeechToText: false });
     }
   }
 }));

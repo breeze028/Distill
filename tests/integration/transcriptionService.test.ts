@@ -68,10 +68,35 @@ class SuccessfulStt implements SpeechToTextService {
       ]
     };
   }
+
+  async getStatus() {
+    return mockStatus();
+  }
 }
 
 class FailingStt implements SpeechToTextService {
   async transcribe(): Promise<SpeechToTextResult> {
     throw new Error('mock STT failed');
   }
+
+  async getStatus() {
+    return mockStatus();
+  }
+}
+
+function mockStatus() {
+  return {
+    provider: 'mock' as const,
+    ready: true,
+    checkedAt: new Date().toISOString(),
+    modelName: 'mock',
+    device: null,
+    computeType: null,
+    pythonCommand: null,
+    workerPath: null,
+    pythonVersion: null,
+    fasterWhisperVersion: null,
+    errorMessage: null,
+    setupHint: null
+  };
 }

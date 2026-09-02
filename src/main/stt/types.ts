@@ -1,3 +1,5 @@
+import type { SpeechToTextStatus } from '@shared/types/domain';
+
 export type SpeechSegment = {
   start: number;
   end: number;
@@ -12,4 +14,5 @@ export type SpeechToTextResult = {
 
 export interface SpeechToTextService {
   transcribe(filePath: string): Promise<SpeechToTextResult>;
+  getStatus(): Promise<SpeechToTextStatus>;
 }

@@ -1,4 +1,4 @@
-import type { AppSettings, ImportRecordingResult, RecordingDetail, RecordingListItem } from './types/domain';
+import type { AppSettings, ImportRecordingResult, RecordingDetail, RecordingListItem, SpeechToTextStatus } from './types/domain';
 import type { SaveSettingsRequest } from './schemas/ipc';
 
 export const ipcChannels = {
@@ -9,7 +9,8 @@ export const ipcChannels = {
   recordingsTranscribe: 'recordings:transcribe',
   recordingsSearch: 'recordings:search',
   settingsGet: 'settings:get',
-  settingsSave: 'settings:save'
+  settingsSave: 'settings:save',
+  sttStatus: 'stt:status'
 } as const;
 
 export type DistillApi = {
@@ -21,6 +22,7 @@ export type DistillApi = {
   searchRecordings(query: string): Promise<RecordingListItem[]>;
   getSettings(): Promise<AppSettings>;
   saveSettings(settings: SaveSettingsRequest): Promise<AppSettings>;
+  getSpeechToTextStatus(): Promise<SpeechToTextStatus>;
 };
 
 declare global {

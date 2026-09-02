@@ -9,7 +9,8 @@ const api: DistillApi = {
   transcribeRecording: (id) => ipcRenderer.invoke(ipcChannels.recordingsTranscribe, id),
   searchRecordings: (query) => ipcRenderer.invoke(ipcChannels.recordingsSearch, query),
   getSettings: () => ipcRenderer.invoke(ipcChannels.settingsGet),
-  saveSettings: (settings) => ipcRenderer.invoke(ipcChannels.settingsSave, settings)
+  saveSettings: (settings) => ipcRenderer.invoke(ipcChannels.settingsSave, settings),
+  getSpeechToTextStatus: () => ipcRenderer.invoke(ipcChannels.sttStatus)
 };
 
 contextBridge.exposeInMainWorld('distillAPI', api);

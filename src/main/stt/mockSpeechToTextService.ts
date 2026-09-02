@@ -11,4 +11,21 @@ export class MockSpeechToTextService implements SpeechToTextService {
       ]
     };
   }
+
+  async getStatus() {
+    return {
+      provider: 'mock' as const,
+      ready: true,
+      checkedAt: new Date().toISOString(),
+      modelName: 'mock',
+      device: null,
+      computeType: null,
+      pythonCommand: null,
+      workerPath: null,
+      pythonVersion: null,
+      fasterWhisperVersion: null,
+      errorMessage: null,
+      setupHint: '当前使用 mock STT。设置 DISTILL_STT_PROVIDER=python 后会启用真实 faster-whisper worker。'
+    };
+  }
 }

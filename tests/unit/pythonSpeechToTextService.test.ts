@@ -65,6 +65,45 @@ describe('PythonSpeechToTextService', () => {
 
     await expect(service.transcribe(path.join(tmpDir, 'audio.m4a'))).rejects.toThrow('invalid JSON');
   });
+
+  it('checks worker readiness without transcribing audio', async () => {
+    const workerPath = writeWorker(`
+      process.stdin.once('data', (chunk) => {
+        const request = JSON.parse(chunk.toString('utf8'));
+        process.stdout.write(JSON.stringify({
+          pythonVersion: '3.12.7',
+          workerPath: __filename,
+          fasterWhisperAvailable: request.type === 'diagnose',
+          fasterWhisperVersion: '1.1.0',
+          errorMessage: null
+        }));
+      });
+    `);
+    const service = new PythonSpeechToTextService({
+      pythonCommand: process.execPath,
+      workerPath,
+      modelName: () => 'faster-whisper-medium',
+      diagnosisTimeoutMs: 1000
+    });
+
+    const status = await service.getStatus();
+
+    expect(status.ready).toBe(true);
+    expect(status.modelName).toBe('medium');
+    expect(status.pythonVersion).toBe('3.12.7');
+    expect(status.fasterWhisperVersion).toBe('1.1.0');
+  });
+
+  it('reports a missing worker as a setup problem', async () => {
+    const service = new PythonSpeechToTextService({
+      workerPath: path.join(tmpDir, 'missing-worker.py')
+    });
+
+    const status = await service.getStatus();
+
+    expect(status.ready).toBe(false);
+    expect(status.errorMessage).toContain('was not found');
+  });
 });
 
 function writeWorker(source: string): string {

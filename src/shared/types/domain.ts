@@ -84,4 +84,21 @@ export type AppSettings = {
   speechModel: string;
 };
 
+export type SpeechToTextProvider = 'mock' | 'python';
+
+export type SpeechToTextStatus = {
+  provider: SpeechToTextProvider;
+  ready: boolean;
+  checkedAt: string;
+  modelName: string;
+  device: string | null;
+  computeType: string | null;
+  pythonCommand: string | null;
+  workerPath: string | null;
+  pythonVersion: string | null;
+  fasterWhisperVersion: string | null;
+  errorMessage: string | null;
+  setupHint: string | null;
+};
+
 export type ImportableAudioFormat = 'm4a' | 'mp3' | 'wav';

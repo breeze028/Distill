@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, FileAudio, FolderOpen, Import, Library, Search, Settings, Upload } from 'lucide-react';
-import type { ProcessingJob, RecordingDetail, RecordingListItem, TranscriptSegment } from '@shared/types/domain';
+import { AlertCircle, CheckCircle2, FileAudio, FolderOpen, Import, Library, RefreshCw, Search, Settings, Upload, XCircle } from 'lucide-react';
+import type { ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { cn } from '@renderer/lib/utils';
@@ -11,10 +11,12 @@ export function App() {
     recordings,
     selectedRecording,
     settings,
+    speechToTextStatus,
     query,
     viewMode,
     loading,
     importing,
+    checkingSpeechToText,
     transcribingIds,
     error,
     load,
@@ -26,7 +28,8 @@ export function App() {
     showLibrary,
     showInbox,
     showSettings,
-    saveSettings
+    saveSettings,
+    refreshSpeechToTextStatus
   } = useLibraryStore();
   const [dragging, setDragging] = useState(false);
 
@@ -75,7 +78,13 @@ export function App() {
       <main className="min-w-0 border-l border-border bg-surface-elevated">
         {error ? <ErrorBanner message={error} /> : null}
         {viewMode === 'settings' ? (
-          <SettingsPane settings={settings} onSave={(input) => void saveSettings(input)} />
+          <SettingsPane
+            settings={settings}
+            speechToTextStatus={speechToTextStatus}
+            checkingSpeechToText={checkingSpeechToText}
+            onSave={(input) => void saveSettings(input)}
+            onRefreshSpeechToText={() => void refreshSpeechToTextStatus()}
+          />
         ) : viewMode === 'inbox' ? (
           <InboxPane settings={settings} onOpenSettings={() => void showSettings()} />
         ) : (
@@ -403,7 +412,13 @@ function TranscriptRow(props: { segment: TranscriptSegment; onClick(): void }) {
   );
 }
 
-function SettingsPane(props: { settings: ReturnType<typeof useLibraryStore.getState>['settings']; onSave(input: Parameters<typeof window.distillAPI.saveSettings>[0]): void }) {
+function SettingsPane(props: {
+  settings: ReturnType<typeof useLibraryStore.getState>['settings'];
+  speechToTextStatus: SpeechToTextStatus | null;
+  checkingSpeechToText: boolean;
+  onSave(input: Parameters<typeof window.distillAPI.saveSettings>[0]): void;
+  onRefreshSpeechToText(): void;
+}) {
   const [watchFolder, setWatchFolder] = useState(props.settings?.watchFolder ?? '');
   const [model, setModel] = useState(props.settings?.deepSeekModel ?? 'deepseek-chat');
   const [speechModel, setSpeechModel] = useState(props.settings?.speechModel ?? 'faster-whisper-small');
@@ -419,6 +434,11 @@ function SettingsPane(props: { settings: ReturnType<typeof useLibraryStore.getSt
     <section className="h-full overflow-y-auto px-8 py-6">
       <h1 className="text-2xl font-semibold">Settings</h1>
       <div className="mt-7 max-w-2xl space-y-7">
+        <SttStatusPanel
+          status={props.speechToTextStatus}
+          checking={props.checkingSpeechToText}
+          onRefresh={props.onRefreshSpeechToText}
+        />
         <Field label="Speech-to-Text Model">
           <Input value={speechModel} onChange={(event) => setSpeechModel(event.target.value)} />
         </Field>
@@ -440,6 +460,62 @@ function SettingsPane(props: { settings: ReturnType<typeof useLibraryStore.getSt
       </div>
     </section>
   );
+}
+
+function SttStatusPanel(props: { status: SpeechToTextStatus | null; checking: boolean; onRefresh(): void }) {
+  const status = props.status;
+
+  return (
+    <section className="border-t border-border pt-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Speech-to-Text Status</div>
+          <div className="mt-2 flex items-center gap-2 text-sm font-medium">
+            {status?.ready ? <CheckCircle2 className="h-4 w-4 text-accent" /> : <XCircle className="h-4 w-4 text-destructive" />}
+            <span>{formatSpeechStatus(status)}</span>
+          </div>
+        </div>
+        <Button variant="secondary" size="sm" onClick={props.onRefresh} disabled={props.checking}>
+          <RefreshCw className={cn('h-4 w-4', props.checking && 'animate-spin')} />
+          Check
+        </Button>
+      </div>
+
+      {status ? (
+        <div className="mt-4 grid gap-2 text-sm">
+          <StatusLine label="Provider" value={status.provider} />
+          <StatusLine label="Model" value={status.modelName} />
+          {status.pythonCommand ? <StatusLine label="Python" value={status.pythonCommand} /> : null}
+          {status.pythonVersion ? <StatusLine label="Python Version" value={status.pythonVersion} /> : null}
+          {status.fasterWhisperVersion ? <StatusLine label="faster-whisper" value={status.fasterWhisperVersion} /> : null}
+          {status.workerPath ? <StatusLine label="Worker" value={status.workerPath} /> : null}
+          {status.errorMessage ? <p className="text-sm leading-6 text-destructive">{status.errorMessage}</p> : null}
+          {status.setupHint ? <p className="text-sm leading-6 text-muted-foreground">{status.setupHint}</p> : null}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">Status has not been checked yet.</p>
+      )}
+    </section>
+  );
+}
+
+function StatusLine(props: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[140px_1fr] gap-3">
+      <span className="text-muted-foreground">{props.label}</span>
+      <span className="min-w-0 break-words">{props.value}</span>
+    </div>
+  );
+}
+
+function formatSpeechStatus(status: SpeechToTextStatus | null): string {
+  if (!status) {
+    return 'Not checked';
+  }
+  if (status.provider === 'mock') {
+    return 'Mock STT ready';
+  }
+  return status.ready ? 'Python worker ready' : 'Setup required';
 }
 
 function Field(props: { label: string; children: React.ReactNode }) {

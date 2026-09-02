@@ -5,12 +5,14 @@ import type { FileImportService } from '@main/services/fileImportService';
 import type { TranscriptionService } from '@main/services/transcriptionService';
 import type { RecordingRepository } from '@main/repositories/recordingRepository';
 import type { SettingsRepository } from '@main/settings/settingsRepository';
+import type { SpeechToTextService } from '@main/stt/types';
 
 export function registerIpcHandlers(dependencies: {
   recordings: RecordingRepository;
   importer: FileImportService;
   transcriber: TranscriptionService;
   settings: SettingsRepository;
+  speechToText: SpeechToTextService;
 }): void {
   ipcMain.handle(ipcChannels.recordingsList, () => dependencies.recordings.listRecordings());
 
@@ -45,4 +47,6 @@ export function registerIpcHandlers(dependencies: {
     const parsed = saveSettingsRequestSchema.parse(input);
     return dependencies.settings.saveSettings(parsed);
   });
+
+  ipcMain.handle(ipcChannels.sttStatus, () => dependencies.speechToText.getStatus());
 }
