@@ -70,7 +70,7 @@ app.whenReady().then(() => {
   const settings = new SettingsRepository(db);
   const importer = new FileImportService(recordings);
   const speechToText = process.env.DISTILL_STT_PROVIDER === 'python'
-    ? new PythonSpeechToTextService()
+    ? new PythonSpeechToTextService({ modelName: settings.getSettings().speechModel })
     : new MockSpeechToTextService();
   const transcriber = new TranscriptionService(recordings, speechToText);
 

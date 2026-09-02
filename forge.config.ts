@@ -12,7 +12,7 @@ const config = {
         mirror: 'https://npmmirror.com/mirrors/electron/'
       }
     },
-    extraResource: ['./src/main/database/migrations'],
+    extraResource: ['./src/main/database/migrations', './python'],
     ignore: [
       /^\/src($|\/)/,
       /^\/tests($|\/)/,

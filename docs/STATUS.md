@@ -42,6 +42,9 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - mock STT 转写结果会保存为 `Transcript` 和 `TranscriptSegment`。
 - Recording Detail 可以展示 transcript segment。
 - 点击 transcript segment 可以让音频 seek 到该句起始时间并播放。
+- Python Worker 已接入 faster-whisper 调用。
+- Main 到 Python Worker 的 JSON 进程协议已增加响应校验、结构化错误、超时和打包路径解析。
+- 打包配置会把 `python/` 作为 extra resource 带入应用。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -89,7 +92,8 @@ pnpm dev
 
 ## 当前已知限制
 
-- faster-whisper 尚未真实接入，当前 UI 转写使用 mock STT 打通流程。
+- 默认 UI 转写仍使用 mock STT；设置 `DISTILL_STT_PROVIDER=python` 后走真实 Python Worker。
+- 首次真实 faster-whisper 转写需要用户本机安装 Python 依赖并下载模型。
 - DeepSeek 尚未接入真实生成流程。
 - Watch Folder 只有设置入口和 Inbox 页面占位，尚未实现文件监听。
 - `ProcessingJob` 还没有覆盖 AI 生成的完整状态流转。
@@ -104,9 +108,9 @@ pnpm dev
 
 优先任务：
 
-- 接入 Python Worker + faster-whisper。
-- 设计并测试 Main 到 Worker 的请求/响应协议。
-- 将当前 mock STT 默认路径切换为真实 Python Worker 路径。
+- 加强真实 STT 的用户可见错误状态。
+- 设计模型安装/依赖检查入口，避免用户手动读命令。
+- 评估是否在开发环境把 Python Worker 作为可选默认路径。
 - Detail 页面展示真实 Transcript。
 - 为 Worker 缺失、模型缺失、转写失败添加 UI 错误状态。
 

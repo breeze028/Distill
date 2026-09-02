@@ -57,7 +57,8 @@
 - 已通过 `ProcessingJob` 记录转写任务状态。
 - 已打通手动触发转写、保存 `Transcript` 与 `TranscriptSegment`、UI 展示 segment 的流程。
 - 已实现点击 Transcript Segment 后音频 seek 到 segment start time。
-- 当前默认仍使用 mock STT，真实 faster-whisper 接入还未完成。
+- 已将 Python Worker 改为真实 faster-whisper 调用，并补充 worker 进程协议校验。
+- 当前默认仍使用 mock STT；设置 `DISTILL_STT_PROVIDER=python` 后可走真实 Python Worker。
 
 ## Phase 2：AI Template 与 DeepSeek 结构化笔记
 
