@@ -1,0 +1,147 @@
+# 长期计划
+
+最后更新：2026-09-02
+
+本文档记录 Distill 的长期开发路线。它不是承诺所有功能一次完成，而是帮助后续 AI 开发始终知道项目下一步应该往哪里走。
+
+## 长期原则
+
+- 核心对象始终是 `Recording`。
+- 核心体验始终是：导入、转写、阅读、回听、理解、整理、搜索。
+- AI 是整理层，不是聊天入口。
+- 保持 local-first、单用户、本地 SQLite 优先。
+- 不为了“看起来高级”引入后端、账号、云同步、向量库或复杂插件系统。
+
+## Phase 0：项目初始化与导入播放闭环
+
+目标：从空目录建立可运行、可测试、可打包的桌面应用，并实现最小纵向闭环。
+
+范围：
+
+- Electron + React + TypeScript + Vite 项目初始化
+- Tailwind CSS、shadcn/ui 约定、Zustand、Zod
+- SQLite、better-sqlite3、FTS5、migration 基础设施
+- Electron Forge、pnpm、Vitest、Playwright
+- Python Worker 基础目录
+- `Recording` 导入、持久化、Library 展示、Detail 打开、音频播放
+- `LLMProvider`、`SpeechToTextService`、`AIArtifact`、`ProcessingJob` 等扩展边界
+- 中文项目文档和 AI 开发规则
+
+状态：已完成。
+
+## Phase 1：真实本地转写闭环
+
+目标：导入 M4A 后自动执行本地 speech-to-text，并把 segment 级 transcript 永久保存。
+
+范围：
+
+- 接入 Python Worker + faster-whisper
+- 设计 Electron Main 到 Python Worker 的可靠 subprocess protocol
+- 保存 `Transcript` 与 `TranscriptSegment`
+- 用 `ProcessingJob` 追踪 pending、running、succeeded、failed
+- UI 显示 Transcribing、Failed、Retry 等状态
+- 点击 Transcript Segment 后音频 seek 到 segment start time
+- 保留 mock STT 测试，不让自动化测试依赖真实 Whisper 模型
+
+验收重点：
+
+- 导入真实 `.m4a` 后能生成中文 transcript
+- segment 的 start/end/text 正确入库
+- 重新打开应用后 transcript 仍存在
+- 点击一句 transcript 可以跳转播放
+- Whisper worker 启动失败、模型缺失、转写失败时有用户可理解的错误
+
+## Phase 2：AI Template 与 DeepSeek 结构化笔记
+
+目标：基于原始 Transcript 生成可解析、可重新生成、可追踪历史的结构化 AI 笔记。
+
+范围：
+
+- 接入 DeepSeek API
+- 完成 `LLMProvider` 调用链
+- 实现 Default Summary、技术思考、个人随想三个内置模板
+- 使用 Zod validation 校验模型输出
+- 保存 `AIArtifact`，包括 provider、model、promptVersion、content、rawResponse
+- JSON 解析失败时保留 raw response，并支持重新生成
+- Settings 页面管理 provider、model 和 API Key
+
+验收重点：
+
+- 不覆盖 Raw Transcript
+- 同一 Recording 可以生成多个 AIArtifact
+- UI 默认展示最新版 artifact
+- API Key 不进入 renderer bundle，不进入日志
+- DeepSeek 缺 key、请求失败、rate limit、JSON 错误都有清晰状态
+
+## Phase 3：搜索与资料库体验
+
+目标：让录音资料库可用、可找、可浏览。
+
+范围：
+
+- 完善 SQLite FTS5 索引
+- 搜索 Transcript、AI title、summary、key points、todos、tags
+- 支持中文文件名、中文 transcript、中英文混合搜索
+- Library 列表显示 title、date、duration、processing state、tags
+- 基础筛选：Inbox、Today、Work、Ideas、Life 等可以先用虚拟分类或 tag 实现
+- 录音详情页强化阅读体验
+
+验收重点：
+
+- 搜索速度在本地资料库规模增长后仍可接受
+- 搜索结果能打开对应 Recording
+- 中文搜索不崩溃，结果可解释
+
+## Phase 4：Watch Folder
+
+目标：支持配置 Inbox 文件夹，并自动导入新音频。
+
+范围：
+
+- Settings 配置 watch folder
+- Main process 监听文件夹
+- 避免重复导入
+- 处理文件尚未复制完成的情况
+- 记录导入 job 和错误
+- UI 显示 Inbox 状态
+
+验收重点：
+
+- 将 `.m4a` 放入 watch folder 后自动导入
+- 同一文件不会重复导入
+- 文件移动、删除、复制中断时错误可见但不破坏数据库
+
+## Phase 5：稳定性、打包与数据安全
+
+目标：把原型提升到长期可用的本地桌面应用。
+
+范围：
+
+- Windows 安全存储方案替换临时 SecretStorage
+- 重新评估是否启用 `asar`
+- 完善日志文件输出、日志轮转和敏感信息脱敏
+- 数据库备份/恢复基础能力
+- 音频文件缺失后的定位与修复流程
+- 更完整的 Playwright UI 验收
+
+验收重点：
+
+- 应用关闭重开、系统重启后数据可靠
+- 打包产物可在干净 Windows 环境运行
+- secret 不以明文暴露给 renderer 或日志
+
+## 暂不进入近期计划
+
+- iPhone App / Android App
+- 账号系统
+- 后端服务
+- 云同步
+- 团队协作
+- 向量数据库
+- embedding search
+- speaker diarization
+- 复杂富文本编辑器
+- Windows 内录音
+- 音频剪辑器
+- 浏览器扩展
+- 插件系统

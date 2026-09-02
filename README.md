@@ -28,6 +28,15 @@ pnpm test
 pnpm build
 ```
 
+## 项目文档
+
+- [产品说明](docs/PRODUCT.md)
+- [长期计划](docs/ROADMAP.md)
+- [完成情况](docs/STATUS.md)
+- [架构说明](docs/ARCHITECTURE.md)
+- [开发说明](docs/DEVELOPMENT.md)
+- [AI 开发指南](AGENTS.md)
+
 ## 环境变量
 
 只在本地开发时创建 `.env`，用于保存开发密钥：
