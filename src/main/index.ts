@@ -6,10 +6,13 @@ import started from 'electron-squirrel-startup';
 import { DatabaseManager } from '@main/database/database';
 import { RecordingRepository } from '@main/repositories/recordingRepository';
 import { FileImportService } from '@main/services/fileImportService';
+import { TranscriptionService } from '@main/services/transcriptionService';
 import { SettingsRepository } from '@main/settings/settingsRepository';
 import { registerIpcHandlers } from '@main/ipc/registerIpc';
 import { builtInTemplates } from '@main/llm/templates';
 import { logger } from '@main/logging/logger';
+import { MockSpeechToTextService } from '@main/stt/mockSpeechToTextService';
+import { PythonSpeechToTextService } from '@main/stt/pythonSpeechToTextService';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -66,9 +69,13 @@ app.whenReady().then(() => {
   recordings = new RecordingRepository(db);
   const settings = new SettingsRepository(db);
   const importer = new FileImportService(recordings);
+  const speechToText = process.env.DISTILL_STT_PROVIDER === 'python'
+    ? new PythonSpeechToTextService()
+    : new MockSpeechToTextService();
+  const transcriber = new TranscriptionService(recordings, speechToText);
 
   recordings.ensureBuiltInTemplates([...builtInTemplates]);
-  registerIpcHandlers({ recordings, importer, settings });
+  registerIpcHandlers({ recordings, importer, transcriber, settings });
   registerAudioProtocol();
   createWindow();
 

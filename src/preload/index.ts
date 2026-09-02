@@ -6,6 +6,7 @@ const api: DistillApi = {
   getRecording: (id) => ipcRenderer.invoke(ipcChannels.recordingsGet, id),
   importRecordingFromDialog: () => ipcRenderer.invoke(ipcChannels.recordingsImportDialog),
   importRecordingFromPath: (filePath) => ipcRenderer.invoke(ipcChannels.recordingsImportPath, { filePath }),
+  transcribeRecording: (id) => ipcRenderer.invoke(ipcChannels.recordingsTranscribe, id),
   searchRecordings: (query) => ipcRenderer.invoke(ipcChannels.recordingsSearch, query),
   getSettings: () => ipcRenderer.invoke(ipcChannels.settingsGet),
   saveSettings: (settings) => ipcRenderer.invoke(ipcChannels.settingsSave, settings)

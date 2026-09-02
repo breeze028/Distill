@@ -51,6 +51,14 @@
 - 点击一句 transcript 可以跳转播放
 - Whisper worker 启动失败、模型缺失、转写失败时有用户可理解的错误
 
+当前推进：
+
+- 已建立 `TranscriptionService` 主干。
+- 已通过 `ProcessingJob` 记录转写任务状态。
+- 已打通手动触发转写、保存 `Transcript` 与 `TranscriptSegment`、UI 展示 segment 的流程。
+- 已实现点击 Transcript Segment 后音频 seek 到 segment start time。
+- 当前默认仍使用 mock STT，真实 faster-whisper 接入还未完成。
+
 ## Phase 2：AI Template 与 DeepSeek 结构化笔记
 
 目标：基于原始 Transcript 生成可解析、可重新生成、可追踪历史的结构化 AI 笔记。

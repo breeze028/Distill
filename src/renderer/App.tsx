@@ -15,11 +15,13 @@ export function App() {
     viewMode,
     loading,
     importing,
+    transcribingIds,
     error,
     load,
     selectRecording,
     importFromDialog,
     importFromPath,
+    transcribeRecording,
     search,
     showLibrary,
     showInbox,
@@ -77,7 +79,13 @@ export function App() {
         ) : viewMode === 'inbox' ? (
           <InboxPane settings={settings} onOpenSettings={() => void showSettings()} />
         ) : (
-          <RecordingDetailPane recording={selectedRecording} importing={importing} onImport={() => void importFromDialog()} />
+          <RecordingDetailPane
+            recording={selectedRecording}
+            importing={importing}
+            isTranscribing={selectedRecording ? Boolean(transcribingIds[selectedRecording.id]) : false}
+            onImport={() => void importFromDialog()}
+            onTranscribe={(id) => void transcribeRecording(id)}
+          />
         )}
       </main>
     </div>
@@ -242,7 +250,13 @@ function RecordingRow(props: { recording: RecordingListItem; selected: boolean; 
   );
 }
 
-function RecordingDetailPane(props: { recording: RecordingDetail | null; importing: boolean; onImport(): void }) {
+function RecordingDetailPane(props: {
+  recording: RecordingDetail | null;
+  importing: boolean;
+  isTranscribing: boolean;
+  onImport(): void;
+  onTranscribe(id: string): void;
+}) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
 
@@ -265,22 +279,23 @@ function RecordingDetailPane(props: { recording: RecordingDetail | null; importi
       </div>
     );
   }
+  const recording = props.recording;
 
   return (
     <article className="flex h-full min-w-0 flex-col">
       <header className="border-b border-border px-8 py-5">
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-semibold leading-tight">{props.recording.latestArtifact?.content.title ?? props.recording.title}</h1>
-            <p className="mt-1 truncate text-sm text-muted-foreground">{props.recording.filePath}</p>
+            <h1 className="truncate text-2xl font-semibold leading-tight">{recording.latestArtifact?.content.title ?? recording.title}</h1>
+            <p className="mt-1 truncate text-sm text-muted-foreground">{recording.filePath}</p>
           </div>
           <div className="shrink-0 text-right text-sm text-muted-foreground">
-            <div>{formatDuration(props.recording.duration)}</div>
-            <div>{props.recording.format.toUpperCase()}</div>
+            <div>{formatDuration(recording.duration)}</div>
+            <div>{recording.format.toUpperCase()}</div>
           </div>
         </div>
         <div className="mt-5 flex items-center gap-3">
-          <audio ref={audioRef} className="h-10 flex-1" src={`distill-audio://recording/${props.recording.id}`} controls />
+          <audio ref={audioRef} className="h-10 flex-1" src={`distill-audio://recording/${recording.id}`} controls />
           <select
             className="h-9 rounded border border-input bg-background px-2 text-sm"
             value={playbackRate}
@@ -291,17 +306,25 @@ function RecordingDetailPane(props: { recording: RecordingDetail | null; importi
               <option key={rate} value={rate}>{rate}x</option>
             ))}
           </select>
+          <Button
+            variant="secondary"
+            onClick={() => props.onTranscribe(recording.id)}
+            disabled={props.isTranscribing}
+            title={recording.transcript ? 'Regenerate transcript' : 'Transcribe recording'}
+          >
+            {props.isTranscribing ? 'Transcribing...' : recording.transcript ? 'Retranscribe' : 'Transcribe Recording'}
+          </Button>
         </div>
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,420px)_1fr]">
         <section className="min-w-0 overflow-y-auto border-r border-border px-8 py-6">
           <SectionTitle title="Summary" />
-          {props.recording.latestArtifact ? (
+          {recording.latestArtifact ? (
             <div className="space-y-6 text-sm leading-6">
-              <p>{props.recording.latestArtifact.content.summary}</p>
-              <NoteList title="Key Points" items={props.recording.latestArtifact.content.keyPoints} />
-              <NoteList title="Todos" items={props.recording.latestArtifact.content.todos} />
+              <p>{recording.latestArtifact.content.summary}</p>
+              <NoteList title="Key Points" items={recording.latestArtifact.content.keyPoints} />
+              <NoteList title="Todos" items={recording.latestArtifact.content.todos} />
             </div>
           ) : (
             <EmptySection text="AI summary is not generated yet. The LLM provider interface and artifact model are ready for the next phase." />
@@ -310,9 +333,9 @@ function RecordingDetailPane(props: { recording: RecordingDetail | null; importi
 
         <section className="min-w-0 overflow-y-auto px-8 py-6">
           <SectionTitle title="Transcript" />
-          {props.recording.transcript?.segments.length ? (
+          {recording.transcript?.segments.length ? (
             <div className="space-y-1">
-              {props.recording.transcript.segments.map((segment) => (
+              {recording.transcript.segments.map((segment) => (
                 <TranscriptRow
                   key={segment.id}
                   segment={segment}
@@ -325,8 +348,15 @@ function RecordingDetailPane(props: { recording: RecordingDetail | null; importi
                 />
               ))}
             </div>
+          ) : props.isTranscribing || recording.processingState === 'running' ? (
+            <EmptySection text="Transcribing... Transcript segments will appear here after the speech-to-text job completes." />
           ) : (
-            <EmptySection text="No transcript yet. Phase 0 keeps the STT boundary in place before faster-whisper is enabled." />
+            <div className="max-w-[520px]">
+              <EmptySection text="No transcript yet. Use the transcription action to create segment-level transcript data." />
+              <Button className="mt-4" variant="secondary" onClick={() => props.onTranscribe(recording.id)}>
+                Start Transcription
+              </Button>
+            </div>
           )}
         </section>
       </div>

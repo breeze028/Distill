@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { SqliteDatabase } from '@main/database/database';
-import type { AIArtifact, AIArtifactContent, ProcessingState, RecordingDetail, RecordingListItem, Transcript } from '@shared/types/domain';
+import type { AIArtifact, AIArtifactContent, ProcessingJob, ProcessingJobKind, ProcessingState, RecordingDetail, RecordingListItem, Transcript } from '@shared/types/domain';
 import { aiArtifactContentSchema } from '@shared/schemas/ai';
 
 type RecordingRow = {
@@ -43,6 +43,18 @@ type ArtifactRow = {
   content_json: string;
   raw_response: string | null;
   created_at: string;
+};
+
+type ProcessingJobRow = {
+  id: string;
+  recording_id: string;
+  kind: ProcessingJobKind;
+  state: ProcessingState;
+  error_message: string | null;
+  error_detail: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
 };
 
 export type NewRecording = {
@@ -126,7 +138,8 @@ export class RecordingRepository {
     return {
       ...this.toListItem(row),
       transcript: this.getLatestTranscript(id),
-      latestArtifact: this.getLatestArtifact(id)
+      latestArtifact: this.getLatestArtifact(id),
+      jobs: this.listProcessingJobs(id)
     };
   }
 
@@ -136,7 +149,7 @@ export class RecordingRepository {
       return this.listRecordings();
     }
 
-    const rows = this.db
+    const ftsRows = this.db
       .prepare(
         `SELECT r.*
          FROM recording_fts f
@@ -146,7 +159,30 @@ export class RecordingRepository {
       )
       .all(toFtsQuery(trimmed)) as RecordingRow[];
 
-    return rows.map((row) => this.toListItem(row));
+    const likeQuery = `%${escapeLike(trimmed)}%`;
+    const fallbackRows = this.db
+      .prepare(
+        `SELECT DISTINCT r.*
+         FROM recording r
+         LEFT JOIN transcript tr ON tr.recording_id = r.id
+         LEFT JOIN ai_artifact a ON a.recording_id = r.id
+         LEFT JOIN recording_tag rt ON rt.recording_id = r.id
+         LEFT JOIN tag t ON t.id = rt.tag_id
+         WHERE r.title LIKE ? ESCAPE '\\'
+          OR r.original_file_name LIKE ? ESCAPE '\\'
+          OR tr.full_text LIKE ? ESCAPE '\\'
+          OR a.content_json LIKE ? ESCAPE '\\'
+          OR t.name LIKE ? ESCAPE '\\'
+         ORDER BY r.imported_at DESC`
+      )
+      .all(likeQuery, likeQuery, likeQuery, likeQuery, likeQuery) as RecordingRow[];
+
+    const rowsById = new Map<string, RecordingRow>();
+    for (const row of [...ftsRows, ...fallbackRows]) {
+      rowsById.set(row.id, row);
+    }
+
+    return [...rowsById.values()].map((row) => this.toListItem(row));
   }
 
   addTranscript(recordingId: string, transcript: Omit<Transcript, 'id' | 'recordingId' | 'createdAt'>): Transcript {
@@ -216,14 +252,47 @@ export class RecordingRepository {
     write();
   }
 
-  private createProcessingJob(recordingId: string, kind: string, state: ProcessingState): void {
+  createProcessingJob(recordingId: string, kind: ProcessingJobKind, state: ProcessingState = 'pending'): ProcessingJob {
     const now = new Date().toISOString();
+    const startedAt = state === 'pending' ? null : now;
+    const finishedAt = state === 'succeeded' || state === 'failed' ? now : null;
+    const id = crypto.randomUUID();
+
     this.db
       .prepare(
         `INSERT INTO processing_job (id, recording_id, kind, state, created_at, started_at, finished_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(crypto.randomUUID(), recordingId, kind, state, now, now, now);
+      .run(id, recordingId, kind, state, now, startedAt, finishedAt);
+
+    return this.getProcessingJob(id);
+  }
+
+  markProcessingJobRunning(id: string): ProcessingJob {
+    const now = new Date().toISOString();
+    this.db
+      .prepare("UPDATE processing_job SET state = 'running', started_at = COALESCE(started_at, ?), error_message = NULL, error_detail = NULL WHERE id = ?")
+      .run(now, id);
+    return this.getProcessingJob(id);
+  }
+
+  markProcessingJobSucceeded(id: string): ProcessingJob {
+    const now = new Date().toISOString();
+    this.db.prepare("UPDATE processing_job SET state = 'succeeded', finished_at = ? WHERE id = ?").run(now, id);
+    return this.getProcessingJob(id);
+  }
+
+  markProcessingJobFailed(id: string, errorMessage: string, errorDetail: string | null): ProcessingJob {
+    const now = new Date().toISOString();
+    this.db
+      .prepare("UPDATE processing_job SET state = 'failed', error_message = ?, error_detail = ?, finished_at = ? WHERE id = ?")
+      .run(errorMessage, errorDetail, now, id);
+    return this.getProcessingJob(id);
+  }
+
+  updateRecordingProcessingState(recordingId: string, state: ProcessingState): void {
+    this.db.prepare('UPDATE recording SET processing_state = ? WHERE id = ?').run(state, recordingId);
+    this.refreshSearchIndex(recordingId);
   }
 
   private toListItem(row: RecordingRow): RecordingListItem {
@@ -333,8 +402,25 @@ export class RecordingRepository {
     return {
       ...this.toListItem(row),
       transcript: this.getLatestTranscript(id),
-      latestArtifact: this.getLatestArtifact(id)
+      latestArtifact: this.getLatestArtifact(id),
+      jobs: this.listProcessingJobs(id)
     };
+  }
+
+  private listProcessingJobs(recordingId: string): ProcessingJob[] {
+    const rows = this.db
+      .prepare('SELECT * FROM processing_job WHERE recording_id = ? ORDER BY created_at DESC')
+      .all(recordingId) as ProcessingJobRow[];
+
+    return rows.map(toProcessingJob);
+  }
+
+  private getProcessingJob(id: string): ProcessingJob {
+    const row = this.db.prepare('SELECT * FROM processing_job WHERE id = ?').get(id) as ProcessingJobRow | undefined;
+    if (!row) {
+      throw new Error(`Processing job not found: ${id}`);
+    }
+    return toProcessingJob(row);
   }
 }
 
@@ -350,4 +436,22 @@ function toFtsQuery(input: string): string {
     .split(/\s+/)
     .map((part) => `"${part.replace(/"/g, '""')}"`)
     .join(' OR ');
+}
+
+function escapeLike(input: string): string {
+  return input.replace(/[\\%_]/g, (part) => `\\${part}`);
+}
+
+function toProcessingJob(row: ProcessingJobRow): ProcessingJob {
+  return {
+    id: row.id,
+    recordingId: row.recording_id,
+    kind: row.kind,
+    state: row.state,
+    errorMessage: row.error_message,
+    errorDetail: row.error_detail,
+    createdAt: row.created_at,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at
+  };
 }

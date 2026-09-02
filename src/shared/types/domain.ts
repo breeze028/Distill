@@ -1,4 +1,5 @@
 export type ProcessingState = 'pending' | 'running' | 'succeeded' | 'failed';
+export type ProcessingJobKind = 'import' | 'transcription' | 'ai';
 
 export type RecordingListItem = {
   id: string;
@@ -52,9 +53,22 @@ export type AIArtifact = {
   createdAt: string;
 };
 
+export type ProcessingJob = {
+  id: string;
+  recordingId: string;
+  kind: ProcessingJobKind;
+  state: ProcessingState;
+  errorMessage: string | null;
+  errorDetail: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+};
+
 export type RecordingDetail = RecordingListItem & {
   transcript: Transcript | null;
   latestArtifact: AIArtifact | null;
+  jobs: ProcessingJob[];
 };
 
 export type ImportRecordingResult = {

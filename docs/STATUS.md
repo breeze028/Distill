@@ -6,11 +6,15 @@
 
 ## 当前阶段
 
-当前处于 Phase 0 完成后的验收阶段。
+当前处于 Phase 1 起步阶段。
 
 Phase 0 目标：项目初始化，并实现 `Import M4A -> 存入 Recording -> Library 显示 -> 打开 Detail -> 播放 M4A` 的最小纵向闭环。
 
 状态：已完成。
+
+Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speech-to-text。
+
+状态：进行中。
 
 ## 已完成
 
@@ -31,6 +35,13 @@ Phase 0 目标：项目初始化，并实现 `Import M4A -> 存入 Recording -> 
 - 实现 Inbox 页面占位入口。
 - 移除 Electron 默认原生菜单栏，避免顶部 File/Edit/View 菜单造成焦点问题。
 - 修复 Sidebar navigation：Library、Inbox、Settings 可以切换，Inbox/Settings 再点一次可收回。
+- 新增 `TranscriptionService`。
+- 新增 `recordings:transcribe` IPC。
+- 新增手动触发转写按钮。
+- 转写流程会创建并更新 `ProcessingJob`。
+- mock STT 转写结果会保存为 `Transcript` 和 `TranscriptSegment`。
+- Recording Detail 可以展示 transcript segment。
+- 点击 transcript segment 可以让音频 seek 到该句起始时间并播放。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -43,6 +54,7 @@ Phase 0 目标：项目初始化，并实现 `Import M4A -> 存入 Recording -> 
 - `SpeechToTextService` 已定义，并有 Python Worker 实现骨架与 mock 实现。
 - `AIArtifact` 数据模型已建立，避免把 AI 输出写死为 `Recording.summary`。
 - `ProcessingJob` 表已建立，但导入以外的长任务状态流转还未完整接入。
+- 转写任务已开始使用 `ProcessingJob`，AI 生成任务尚未接入。
 
 ## 验证记录
 
@@ -68,16 +80,19 @@ pnpm dev
 - packaged app 导入真实 `.m4a`
 - 导入后持久化
 - 点击录音进入详情
+- 手动触发 mock 转写
+- 转写后展示 transcript segment
+- transcript segment 文本可见
 - audio element 加载到有效时长
 - Electron application menu 已移除
 - Inbox 和 Settings 可打开/收回
 
 ## 当前已知限制
 
-- faster-whisper 尚未真实接入。
+- faster-whisper 尚未真实接入，当前 UI 转写使用 mock STT 打通流程。
 - DeepSeek 尚未接入真实生成流程。
 - Watch Folder 只有设置入口和 Inbox 页面占位，尚未实现文件监听。
-- `ProcessingJob` 还没有覆盖转写和 AI 生成的完整状态流转。
+- `ProcessingJob` 还没有覆盖 AI 生成的完整状态流转。
 - Settings 中 API Key 暂存在 SQLite，未来需要替换为 Windows 安全存储方案。
 - Forge packaging 为了 Phase 0 中诊断 `better-sqlite3` 原生依赖，暂时关闭 `asar`。
 - 当前 UI 文案仍有较多英文，后续可以逐步中文化或引入轻量 i18n。
@@ -85,16 +100,14 @@ pnpm dev
 
 ## 下一步建议
 
-推荐进入 Phase 1：真实本地转写闭环。
+继续推进 Phase 1：真实本地转写闭环。
 
 优先任务：
 
 - 接入 Python Worker + faster-whisper。
 - 设计并测试 Main 到 Worker 的请求/响应协议。
-- 导入 Recording 后创建并更新 `ProcessingJob`。
-- 保存 `Transcript` 和 `TranscriptSegment`。
+- 将当前 mock STT 默认路径切换为真实 Python Worker 路径。
 - Detail 页面展示真实 Transcript。
-- 点击 Transcript Segment 后音频 seek 到对应时间。
 - 为 Worker 缺失、模型缺失、转写失败添加 UI 错误状态。
 
 ## 重要提交

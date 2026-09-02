@@ -11,11 +11,13 @@ type LibraryState = {
   viewMode: ViewMode;
   loading: boolean;
   importing: boolean;
+  transcribingIds: Record<string, boolean>;
   error: string | null;
   load(): Promise<void>;
   selectRecording(id: string): Promise<void>;
   importFromDialog(): Promise<void>;
   importFromPath(filePath: string): Promise<void>;
+  transcribeRecording(id: string): Promise<void>;
   search(query: string): Promise<void>;
   showLibrary(): void;
   showInbox(): Promise<void>;
@@ -31,6 +33,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   viewMode: 'library',
   loading: false,
   importing: false,
+  transcribingIds: {},
   error: null,
 
   async load() {
@@ -84,6 +87,28 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       set({ error: toMessage(error) });
     } finally {
       set({ importing: false });
+    }
+  },
+
+  async transcribeRecording(id) {
+    set((state) => ({
+      transcribingIds: { ...state.transcribingIds, [id]: true },
+      error: null,
+      viewMode: 'library'
+    }));
+    try {
+      const recording = await window.distillAPI.transcribeRecording(id);
+      const recordings = await window.distillAPI.listRecordings();
+      set({ recordings, selectedRecording: recording });
+    } catch (error) {
+      const recording = await window.distillAPI.getRecording(id).catch(() => null);
+      const recordings = await window.distillAPI.listRecordings().catch(() => get().recordings);
+      set({ error: toMessage(error), selectedRecording: recording, recordings });
+    } finally {
+      set((state) => {
+        const { [id]: _finished, ...remaining } = state.transcribingIds;
+        return { transcribingIds: remaining };
+      });
     }
   },
 

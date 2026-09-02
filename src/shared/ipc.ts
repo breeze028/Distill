@@ -6,6 +6,7 @@ export const ipcChannels = {
   recordingsGet: 'recordings:get',
   recordingsImportDialog: 'recordings:import-dialog',
   recordingsImportPath: 'recordings:import-path',
+  recordingsTranscribe: 'recordings:transcribe',
   recordingsSearch: 'recordings:search',
   settingsGet: 'settings:get',
   settingsSave: 'settings:save'
@@ -16,6 +17,7 @@ export type DistillApi = {
   getRecording(id: string): Promise<RecordingDetail | null>;
   importRecordingFromDialog(): Promise<ImportRecordingResult | null>;
   importRecordingFromPath(filePath: string): Promise<ImportRecordingResult>;
+  transcribeRecording(id: string): Promise<RecordingDetail>;
   searchRecordings(query: string): Promise<RecordingListItem[]>;
   getSettings(): Promise<AppSettings>;
   saveSettings(settings: SaveSettingsRequest): Promise<AppSettings>;

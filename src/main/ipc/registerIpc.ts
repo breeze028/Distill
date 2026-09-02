@@ -2,12 +2,14 @@ import { dialog, ipcMain } from 'electron';
 import { ipcChannels } from '@shared/ipc';
 import { importRecordingRequestSchema, saveSettingsRequestSchema } from '@shared/schemas/ipc';
 import type { FileImportService } from '@main/services/fileImportService';
+import type { TranscriptionService } from '@main/services/transcriptionService';
 import type { RecordingRepository } from '@main/repositories/recordingRepository';
 import type { SettingsRepository } from '@main/settings/settingsRepository';
 
 export function registerIpcHandlers(dependencies: {
   recordings: RecordingRepository;
   importer: FileImportService;
+  transcriber: TranscriptionService;
   settings: SettingsRepository;
 }): void {
   ipcMain.handle(ipcChannels.recordingsList, () => dependencies.recordings.listRecordings());
@@ -32,6 +34,8 @@ export function registerIpcHandlers(dependencies: {
     const parsed = importRecordingRequestSchema.parse(input);
     return dependencies.importer.importFile(parsed.filePath);
   });
+
+  ipcMain.handle(ipcChannels.recordingsTranscribe, (_event, id: string) => dependencies.transcriber.transcribeRecording(id));
 
   ipcMain.handle(ipcChannels.recordingsSearch, (_event, query: string) => dependencies.recordings.search(query));
 
