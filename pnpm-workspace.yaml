@@ -1,0 +1,21 @@
+packages:
+  - "."
+
+overrides:
+  "@electron/rebuild": "3.6.2"
+  vite: "6.4.3"
+
+blockExoticSubdeps: false
+nodeLinker: hoisted
+
+onlyBuiltDependencies:
+  - better-sqlite3
+  - electron
+  - electron-winstaller
+  - esbuild
+
+allowBuilds:
+  better-sqlite3: true
+  electron: true
+  electron-winstaller: true
+  esbuild: true

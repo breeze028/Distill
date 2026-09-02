@@ -1,0 +1,102 @@
+import { app, BrowserWindow, Menu, net, protocol } from 'electron';
+import path from 'node:path';
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import started from 'electron-squirrel-startup';
+import { DatabaseManager } from '@main/database/database';
+import { RecordingRepository } from '@main/repositories/recordingRepository';
+import { FileImportService } from '@main/services/fileImportService';
+import { SettingsRepository } from '@main/settings/settingsRepository';
+import { registerIpcHandlers } from '@main/ipc/registerIpc';
+import { builtInTemplates } from '@main/llm/templates';
+import { logger } from '@main/logging/logger';
+
+declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
+declare const MAIN_WINDOW_VITE_NAME: string;
+
+if (started) {
+  app.quit();
+}
+
+let databaseManager: DatabaseManager | null = null;
+let recordings: RecordingRepository | null = null;
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'distill-audio',
+    privileges: {
+      secure: true,
+      stream: true,
+      supportFetchAPI: true
+    }
+  }
+]);
+
+function createWindow(): void {
+  const mainWindow = new BrowserWindow({
+    width: 1366,
+    height: 860,
+    minWidth: 1100,
+    minHeight: 720,
+    title: 'Distill',
+    autoHideMenuBar: true,
+    backgroundColor: '#f7f6f3',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
+    }
+  });
+  mainWindow.setMenuBarVisibility(false);
+
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    void mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  } else {
+    void mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+  }
+}
+
+app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
+
+  databaseManager = new DatabaseManager();
+  const db = databaseManager.open();
+  recordings = new RecordingRepository(db);
+  const settings = new SettingsRepository(db);
+  const importer = new FileImportService(recordings);
+
+  recordings.ensureBuiltInTemplates([...builtInTemplates]);
+  registerIpcHandlers({ recordings, importer, settings });
+  registerAudioProtocol();
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    databaseManager?.close();
+    app.quit();
+  }
+});
+
+function registerAudioProtocol(): void {
+  protocol.handle('distill-audio', async (request) => {
+    const url = new URL(request.url);
+    const id = url.hostname === 'recording' ? url.pathname.replace(/^\//, '') : '';
+    const recording = id && recordings ? recordings.getRecording(id) : null;
+
+    if (!recording || !fs.existsSync(recording.filePath)) {
+      logger.warn('Audio', 'Audio file is missing', { recordingId: id });
+      return new Response('Audio file not found.', { status: 404 });
+    }
+
+    return net.fetch(pathToFileURL(recording.filePath).toString());
+  });
+}

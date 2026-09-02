@@ -1,0 +1,14 @@
+import { contextBridge, ipcRenderer } from 'electron';
+import { ipcChannels, type DistillApi } from '@shared/ipc';
+
+const api: DistillApi = {
+  listRecordings: () => ipcRenderer.invoke(ipcChannels.recordingsList),
+  getRecording: (id) => ipcRenderer.invoke(ipcChannels.recordingsGet, id),
+  importRecordingFromDialog: () => ipcRenderer.invoke(ipcChannels.recordingsImportDialog),
+  importRecordingFromPath: (filePath) => ipcRenderer.invoke(ipcChannels.recordingsImportPath, { filePath }),
+  searchRecordings: (query) => ipcRenderer.invoke(ipcChannels.recordingsSearch, query),
+  getSettings: () => ipcRenderer.invoke(ipcChannels.settingsGet),
+  saveSettings: (settings) => ipcRenderer.invoke(ipcChannels.settingsSave, settings)
+};
+
+contextBridge.exposeInMainWorld('distillAPI', api);

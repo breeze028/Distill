@@ -1,0 +1,44 @@
+import { dialog, ipcMain } from 'electron';
+import { ipcChannels } from '@shared/ipc';
+import { importRecordingRequestSchema, saveSettingsRequestSchema } from '@shared/schemas/ipc';
+import type { FileImportService } from '@main/services/fileImportService';
+import type { RecordingRepository } from '@main/repositories/recordingRepository';
+import type { SettingsRepository } from '@main/settings/settingsRepository';
+
+export function registerIpcHandlers(dependencies: {
+  recordings: RecordingRepository;
+  importer: FileImportService;
+  settings: SettingsRepository;
+}): void {
+  ipcMain.handle(ipcChannels.recordingsList, () => dependencies.recordings.listRecordings());
+
+  ipcMain.handle(ipcChannels.recordingsGet, (_event, id: string) => dependencies.recordings.getRecording(id));
+
+  ipcMain.handle(ipcChannels.recordingsImportDialog, async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Import Recording',
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['m4a', 'mp3', 'wav'] }]
+    });
+
+    if (result.canceled || !result.filePaths[0]) {
+      return null;
+    }
+
+    return dependencies.importer.importFile(result.filePaths[0]);
+  });
+
+  ipcMain.handle(ipcChannels.recordingsImportPath, (_event, input: unknown) => {
+    const parsed = importRecordingRequestSchema.parse(input);
+    return dependencies.importer.importFile(parsed.filePath);
+  });
+
+  ipcMain.handle(ipcChannels.recordingsSearch, (_event, query: string) => dependencies.recordings.search(query));
+
+  ipcMain.handle(ipcChannels.settingsGet, () => dependencies.settings.getSettings());
+
+  ipcMain.handle(ipcChannels.settingsSave, (_event, input: unknown) => {
+    const parsed = saveSettingsRequestSchema.parse(input);
+    return dependencies.settings.saveSettings(parsed);
+  });
+}

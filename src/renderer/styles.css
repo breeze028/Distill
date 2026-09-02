@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --background: 42 28% 97%;
+  --foreground: 220 13% 14%;
+  --surface: 42 18% 94%;
+  --surface-elevated: 0 0% 100%;
+  --muted: 40 16% 91%;
+  --muted-foreground: 218 8% 42%;
+  --border: 38 12% 82%;
+  --input: 38 12% 78%;
+  --ring: 203 63% 72%;
+  --accent: 203 64% 38%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 358 62% 45%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --background: 220 12% 11%;
+    --foreground: 40 13% 92%;
+    --surface: 220 10% 15%;
+    --surface-elevated: 220 10% 18%;
+    --muted: 220 8% 20%;
+    --muted-foreground: 40 8% 67%;
+    --border: 220 8% 27%;
+    --input: 220 8% 32%;
+    --ring: 193 54% 42%;
+    --accent: 193 58% 42%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 358 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: Inter, "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  letter-spacing: 0;
+}
+
+::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background-clip: content-box;
+}
