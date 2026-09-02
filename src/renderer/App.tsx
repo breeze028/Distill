@@ -421,12 +421,14 @@ function SettingsPane(props: {
 }) {
   const [watchFolder, setWatchFolder] = useState(props.settings?.watchFolder ?? '');
   const [model, setModel] = useState(props.settings?.deepSeekModel ?? 'deepseek-chat');
+  const [speechProvider, setSpeechProvider] = useState(props.settings?.speechProvider ?? 'mock');
   const [speechModel, setSpeechModel] = useState(props.settings?.speechModel ?? 'faster-whisper-small');
   const [apiKey, setApiKey] = useState('');
 
   useEffect(() => {
     setWatchFolder(props.settings?.watchFolder ?? '');
     setModel(props.settings?.deepSeekModel ?? 'deepseek-chat');
+    setSpeechProvider(props.settings?.speechProvider ?? 'mock');
     setSpeechModel(props.settings?.speechModel ?? 'faster-whisper-small');
   }, [props.settings]);
 
@@ -439,6 +441,16 @@ function SettingsPane(props: {
           checking={props.checkingSpeechToText}
           onRefresh={props.onRefreshSpeechToText}
         />
+        <Field label="Speech-to-Text Provider">
+          <select
+            className="h-9 w-full rounded border border-input bg-background px-2 text-sm"
+            value={speechProvider}
+            onChange={(event) => setSpeechProvider(event.target.value as 'mock' | 'python')}
+          >
+            <option value="mock">Mock STT</option>
+            <option value="python">Python Worker</option>
+          </select>
+        </Field>
         <Field label="Speech-to-Text Model">
           <Input value={speechModel} onChange={(event) => setSpeechModel(event.target.value)} />
         </Field>
@@ -454,7 +466,7 @@ function SettingsPane(props: {
         <Field label="Watch Folder">
           <Input value={watchFolder} placeholder="D:\\VoiceInbox" onChange={(event) => setWatchFolder(event.target.value)} />
         </Field>
-        <Button onClick={() => props.onSave({ deepSeekModel: model, speechModel, watchFolder, ...(apiKey ? { deepSeekApiKey: apiKey } : {}) })}>
+        <Button onClick={() => props.onSave({ deepSeekModel: model, speechProvider, speechModel, watchFolder, ...(apiKey ? { deepSeekApiKey: apiKey } : {}) })}>
           Save Settings
         </Button>
       </div>

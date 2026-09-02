@@ -21,13 +21,15 @@ pnpm build
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r python\requirements.txt
-$env:DISTILL_STT_PROVIDER = "python"
 $env:DISTILL_PYTHON_COMMAND = ".\.venv\Scripts\python.exe"
 pnpm dev
 ```
 
+然后在 Settings 中把 `Speech-to-Text Provider` 改为 `Python Worker`。
+
 可选环境变量：
 
+- `DISTILL_STT_PROVIDER`：首次启动时的默认 provider，可设为 `python`。
 - `DISTILL_WHISPER_MODEL`：默认 `small`，也接受 UI 设置中的 `faster-whisper-small` 形式。
 - `DISTILL_WHISPER_DEVICE`：默认 `auto`。
 - `DISTILL_WHISPER_COMPUTE_TYPE`：默认 `int8`。

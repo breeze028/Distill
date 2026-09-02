@@ -25,7 +25,7 @@ export class MockSpeechToTextService implements SpeechToTextService {
       pythonVersion: null,
       fasterWhisperVersion: null,
       errorMessage: null,
-      setupHint: '当前使用 mock STT。设置 DISTILL_STT_PROVIDER=python 后会启用真实 faster-whisper worker。'
+      setupHint: '当前使用 mock STT。在 Settings 中选择 Python Worker 后会启用真实 faster-whisper 转写。'
     };
   }
 }

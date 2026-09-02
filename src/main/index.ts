@@ -13,6 +13,7 @@ import { builtInTemplates } from '@main/llm/templates';
 import { logger } from '@main/logging/logger';
 import { MockSpeechToTextService } from '@main/stt/mockSpeechToTextService';
 import { PythonSpeechToTextService } from '@main/stt/pythonSpeechToTextService';
+import { SelectableSpeechToTextService } from '@main/stt/selectableSpeechToTextService';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -69,9 +70,10 @@ app.whenReady().then(() => {
   recordings = new RecordingRepository(db);
   const settings = new SettingsRepository(db);
   const importer = new FileImportService(recordings);
-  const speechToText = process.env.DISTILL_STT_PROVIDER === 'python'
-    ? new PythonSpeechToTextService({ modelName: () => settings.getSettings().speechModel })
-    : new MockSpeechToTextService();
+  const speechToText = new SelectableSpeechToTextService(settings, {
+    mock: new MockSpeechToTextService(),
+    python: new PythonSpeechToTextService({ modelName: () => settings.getSettings().speechModel })
+  });
   const transcriber = new TranscriptionService(recordings, speechToText);
 
   recordings.ensureBuiltInTemplates([...builtInTemplates]);

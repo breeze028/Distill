@@ -9,6 +9,7 @@ export const saveSettingsRequestSchema = z.object({
   deepSeekApiKey: z.string().optional(),
   deepSeekModel: z.string().min(1).optional(),
   watchFolder: z.string().optional(),
+  speechProvider: z.enum(['mock', 'python']).optional(),
   speechModel: z.string().min(1).optional()
 });
 

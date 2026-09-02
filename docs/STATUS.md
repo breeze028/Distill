@@ -47,6 +47,7 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - 打包配置会把 `python/` 作为 extra resource 带入应用。
 - Recording Detail 会显示最近一次转写失败原因，并提供重试入口。
 - Settings 已增加 STT 状态检查入口，可以显示当前 provider、模型、Python 命令、worker 路径、Python 版本和 faster-whisper 可用性。
+- Settings 已增加 STT provider 选择，转写和状态检查会按最新设置在 mock/Python Worker 间切换。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -94,7 +95,7 @@ pnpm dev
 
 ## 当前已知限制
 
-- 默认 UI 转写仍使用 mock STT；设置 `DISTILL_STT_PROVIDER=python` 后走真实 Python Worker。
+- 默认 UI 转写仍使用 mock STT；Settings 中选择 `Python Worker` 后走真实 Python Worker。
 - 首次真实 faster-whisper 转写需要用户本机安装 Python 依赖并下载模型。
 - DeepSeek 尚未接入真实生成流程。
 - Watch Folder 只有设置入口和 Inbox 页面占位，尚未实现文件监听。
@@ -111,7 +112,6 @@ pnpm dev
 优先任务：
 
 - 设计模型安装入口，避免用户手动读命令。
-- 评估是否在开发环境把 Python Worker 作为可选默认路径。
 - Detail 页面展示真实 Transcript。
 - 为 Worker 缺失、模型缺失、转写失败添加更细的引导文案。
 

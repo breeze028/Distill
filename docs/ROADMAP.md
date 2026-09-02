@@ -58,8 +58,8 @@
 - 已打通手动触发转写、保存 `Transcript` 与 `TranscriptSegment`、UI 展示 segment 的流程。
 - 已实现点击 Transcript Segment 后音频 seek 到 segment start time。
 - 已将 Python Worker 改为真实 faster-whisper 调用，并补充 worker 进程协议校验。
-- 当前默认仍使用 mock STT；设置 `DISTILL_STT_PROVIDER=python` 后可走真实 Python Worker。
 - 已增加 Settings 中的 STT 环境状态检查入口。
+- 已增加 Settings 中的 STT provider 选择；mock 与 Python Worker 可在应用内切换。
 
 ## Phase 2：AI Template 与 DeepSeek 结构化笔记
 

@@ -7,6 +7,7 @@ const defaults: AppSettings = {
   deepSeekApiKeyConfigured: Boolean(process.env.DEEPSEEK_API_KEY),
   deepSeekModel: 'deepseek-chat',
   watchFolder: '',
+  speechProvider: process.env.DISTILL_STT_PROVIDER === 'python' ? 'python' : 'mock',
   speechModel: 'faster-whisper-small'
 };
 
@@ -22,6 +23,7 @@ export class SettingsRepository {
       deepSeekApiKeyConfigured: Boolean(values.deepSeekApiKey) || defaults.deepSeekApiKeyConfigured,
       deepSeekModel: values.deepSeekModel ?? defaults.deepSeekModel,
       watchFolder: values.watchFolder ?? defaults.watchFolder,
+      speechProvider: values.speechProvider === 'python' ? 'python' : values.speechProvider === 'mock' ? 'mock' : defaults.speechProvider,
       speechModel: values.speechModel ?? defaults.speechModel
     };
   }

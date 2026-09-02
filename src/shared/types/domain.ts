@@ -81,6 +81,7 @@ export type AppSettings = {
   deepSeekApiKeyConfigured: boolean;
   deepSeekModel: string;
   watchFolder: string;
+  speechProvider: SpeechToTextProvider;
   speechModel: string;
 };
 
