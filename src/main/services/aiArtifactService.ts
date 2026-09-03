@@ -2,6 +2,7 @@ import type { RecordingDetail } from '@shared/types/domain';
 import type { RecordingRepository } from '@main/repositories/recordingRepository';
 import type { LLMProvider } from '@main/llm/types';
 import { builtInTemplates } from '@main/llm/templates';
+import { LLMProviderError } from '@main/llm/types';
 import { logger } from '@main/logging/logger';
 
 type AISettings = {
@@ -101,8 +102,13 @@ export class AIArtifactService {
       return updated;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'AI 笔记生成失败。';
-      this.recordings.markProcessingJobFailed(jobId, message, error instanceof Error ? error.stack ?? null : null);
+      const detail = error instanceof LLMProviderError && error.details.rawResponse
+        ? error.details.rawResponse
+        : error instanceof Error
+          ? error.stack ?? null
+          : null;
       this.recordings.updateRecordingProcessingState(recordingId, 'failed');
+      this.recordings.markProcessingJobFailed(jobId, message, detail);
       logger.error('AI', 'Artifact generation job failed', { recordingId, jobId, error: message });
       throw error;
     }

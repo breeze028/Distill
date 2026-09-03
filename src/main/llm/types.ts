@@ -16,3 +16,13 @@ export interface LLMProvider {
   readonly id: string;
   generate(request: LLMRequest): Promise<LLMResponse>;
 }
+
+export class LLMProviderError extends Error {
+  constructor(
+    message: string,
+    readonly details: { status?: number; rawResponse?: string } = {}
+  ) {
+    super(message);
+    this.name = 'LLMProviderError';
+  }
+}

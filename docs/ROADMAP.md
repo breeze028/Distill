@@ -110,13 +110,13 @@
 - 已将 AI 笔记生成接入 `ProcessingJob(kind='ai')`，支持 running、succeeded、failed 基础状态。
 - 已新增 `SelectableLLMProvider` 和 mock LLM，让自动化测试不依赖真实 DeepSeek API。
 - DeepSeek 作为默认真实 provider，当前默认模型继续使用 `deepseek-chat`。
+- 已增加 DeepSeek HTTP/响应/JSON schema 错误分类，并在失败 job 中保留 provider raw response。
 
 下一步：
 
-- 完善 DeepSeek 真实请求的错误分类和用户提示。
 - 增加模板选择 UI，不再只固定使用 `default-summary`。
 - 保存并展示多次生成历史，而不只是最新 artifact。
-- 增加 JSON 解析失败后的 raw response 保留和重试入口。
+- 增加 JSON 解析失败后的 raw response UI 展示和重试入口。
 
 ## Phase 3：搜索与资料库体验
 

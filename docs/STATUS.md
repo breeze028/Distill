@@ -73,6 +73,8 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - 新增 `SelectableLLMProvider`，正常默认走 DeepSeek，测试/开发可显式启用 mock LLM。
 - Recording Detail 的 Summary 区域已增加 Generate/Regenerate Notes 入口。
 - AI 笔记生成会创建 `ProcessingJob(kind='ai')`，运行中显示耗时，成功后写入 `AIArtifact`，失败后显示错误并可重试。
+- DeepSeek provider 已增加基础错误分类：API Key/权限错误、频率或额度限制、服务端错误、响应缺失和 JSON/schema 错误。
+- AI 笔记生成失败时会把 provider raw response 写入 `ProcessingJob.errorDetail`，为后续 UI 诊断和重试入口保留证据。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -127,6 +129,7 @@ pnpm dev
 - 点击 Generate Notes 会立即显示 AI 生成任务耗时
 - mock LLM 生成的 `AIArtifact` 可在详情页 Summary 区展示并持久化
 - AI 生成任务成功/失败会写入 `ProcessingJob`
+- DeepSeek provider 错误分类和 raw response 保留
 - LLM provider 选择默认使用 DeepSeek，mock LLM 只在显式测试/开发环境启用
 - packaged app 导入中文 `.m4a`，并使用 Python Worker + faster-whisper tiny 生成中文真实 transcript
 - packaged app 在不注入 `DISTILL_PYTHON_COMMAND` 时也能自动发现项目 Python venv
@@ -141,7 +144,7 @@ pnpm dev
 - 首次真实 faster-whisper 转写需要用户本机安装 Python 依赖并下载模型。
 - `small`/`medium` 模型在 CPU 上可能明显慢于 `tiny`，短录音默认建议使用 `tiny`。
 - 旧版本已经生成的 mock/占位 transcript 不会被自动删除，需要用户点击 Retranscribe 生成真实内容。
-- DeepSeek provider 已接入生成主干，但真实 API smoke 仍需要通过本地密钥配置单独验证。
+- DeepSeek provider 已接入生成主干并有 mock fetch 单测；真实 API smoke 仍需要通过本地密钥配置单独验证。
 - Watch Folder 只有设置入口和 Inbox 页面占位，尚未实现文件监听。
 - `ProcessingJob` 已覆盖 AI 笔记生成的基础状态流转；更细的 token/费用/重试策略尚未设计。
 - Settings 中 API Key 暂存在 SQLite，未来需要替换为 Windows 安全存储方案。

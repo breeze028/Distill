@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DatabaseManager } from '@main/database/database';
 import { builtInTemplates } from '@main/llm/templates';
+import { LLMProviderError } from '@main/llm/types';
 import type { LLMProvider, LLMRequest, LLMResponse } from '@main/llm/types';
 import { RecordingRepository } from '@main/repositories/recordingRepository';
 import { AIArtifactService } from '@main/services/aiArtifactService';
@@ -65,6 +66,18 @@ describe('AIArtifactService', () => {
     const detail = repository.getRecording(imported.recording.id);
     expect(detail?.jobs.some((job) => job.kind === 'ai')).toBe(false);
   });
+
+  it('stores raw provider responses on failed AI jobs', async () => {
+    const { repository, recordingId } = await createRecordingWithTranscript();
+    const service = new AIArtifactService(repository, new InvalidResponseLLM(), mockSettings());
+
+    await expect(service.generateArtifact(recordingId)).rejects.toThrow('不符合 schema');
+
+    const detail = repository.getRecording(recordingId);
+    const job = detail?.jobs.find((item) => item.kind === 'ai');
+    expect(job?.state).toBe('failed');
+    expect(job?.errorDetail).toBe('{"summary":"缺少标题"}');
+  });
 });
 
 class SuccessfulLLM implements LLMProvider {
@@ -99,6 +112,16 @@ class DelayedLLM implements LLMProvider {
         tags: ['background']
       }
     };
+  }
+}
+
+class InvalidResponseLLM implements LLMProvider {
+  readonly id = 'mock';
+
+  async generate(_request: LLMRequest): Promise<LLMResponse> {
+    throw new LLMProviderError('DeepSeek 返回的笔记 JSON 不符合 schema。', {
+      rawResponse: '{"summary":"缺少标题"}'
+    });
   }
 }
 
