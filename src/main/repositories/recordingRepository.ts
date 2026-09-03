@@ -252,6 +252,39 @@ export class RecordingRepository {
     write();
   }
 
+  recoverInterruptedJobs(errorMessage = '应用关闭或任务中断，处理任务未完成。'): number {
+    const rows = this.db
+      .prepare("SELECT DISTINCT recording_id FROM processing_job WHERE state = 'running'")
+      .all() as Array<{ recording_id: string }>;
+    if (rows.length === 0) {
+      return 0;
+    }
+
+    const now = new Date().toISOString();
+    const recover = this.db.transaction(() => {
+      this.db
+        .prepare("UPDATE processing_job SET state = 'failed', error_message = ?, finished_at = ? WHERE state = 'running'")
+        .run(errorMessage, now);
+
+      for (const row of rows) {
+        this.db
+          .prepare(
+            `UPDATE recording
+             SET processing_state = CASE
+               WHEN EXISTS (SELECT 1 FROM transcript WHERE recording_id = ?) THEN 'succeeded'
+               ELSE 'failed'
+             END
+             WHERE id = ?`
+          )
+          .run(row.recording_id, row.recording_id);
+        this.refreshSearchIndex(row.recording_id);
+      }
+    });
+
+    recover();
+    return rows.length;
+  }
+
   createProcessingJob(recordingId: string, kind: ProcessingJobKind, state: ProcessingState = 'pending'): ProcessingJob {
     const now = new Date().toISOString();
     const startedAt = state === 'pending' ? null : now;

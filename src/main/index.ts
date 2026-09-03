@@ -76,6 +76,10 @@ app.whenReady().then(() => {
   });
   const transcriber = new TranscriptionService(recordings, speechToText);
 
+  const recoveredJobCount = recordings.recoverInterruptedJobs();
+  if (recoveredJobCount > 0) {
+    logger.warn('ProcessingJob', 'Recovered interrupted jobs on startup', { recoveredJobCount });
+  }
   recordings.ensureBuiltInTemplates([...builtInTemplates]);
   registerIpcHandlers({ recordings, importer, transcriber, settings, speechToText });
   registerAudioProtocol();
