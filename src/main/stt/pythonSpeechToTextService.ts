@@ -194,12 +194,26 @@ function resolveDefaultPythonCommand(): string {
     return process.env.DISTILL_PYTHON_COMMAND;
   }
 
-  const sourceTreeVenv = path.join(process.cwd(), 'python', '.venv', 'Scripts', 'python.exe');
-  if (fs.existsSync(sourceTreeVenv)) {
-    return sourceTreeVenv;
+  for (const root of possibleSourceRoots()) {
+    const candidate = path.join(root, 'python', '.venv', 'Scripts', 'python.exe');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
   }
 
   return 'python';
+}
+
+function possibleSourceRoots(): string[] {
+  const roots = [process.cwd()];
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+
+  if (resourcesPath) {
+    roots.push(path.resolve(resourcesPath, '..', '..', '..'));
+  }
+
+  roots.push(path.resolve(process.cwd(), '..', '..'));
+  return [...new Set(roots)];
 }
 
 function normalizeModelName(modelName: string): string {

@@ -56,7 +56,7 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - Python Worker 在 Windows 管道输入/输出/错误流中强制使用 UTF-8，避免中文文件路径和中文真实 transcript 乱码。
 - 新增 transcript 来源元数据：`provider`、`model`、`source_job_id`，用于区分真实 Python Worker 转写和测试 mock 转写。
 - 正常启动默认使用 Python Worker；mock STT 只在显式设置 `DISTILL_ALLOW_MOCK_STT=true` 或 `DISTILL_STT_PROVIDER=mock` 时开放。
-- Python STT 未显式配置命令时，会优先发现源码目录下的 `python\.venv\Scripts\python.exe`。
+- Python STT 未显式配置命令时，会优先发现源码目录下的 `python\.venv\Scripts\python.exe`；从 `out\distill-win32-x64\distill.exe` 手动启动打包应用时也会回溯到项目 venv。
 - Recording Detail 会识别旧 mock/占位 transcript，并提示使用 Python Worker 重新转写。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
@@ -107,6 +107,7 @@ pnpm dev
 - 重开打包应用后 transcript 仍然可见
 - 点击 transcript segment 会 seek 到对应音频时间点
 - packaged app 导入中文 `.m4a`，并使用 Python Worker + faster-whisper tiny 生成中文真实 transcript
+- packaged app 在不注入 `DISTILL_PYTHON_COMMAND` 时也能自动发现项目 Python venv
 - transcript 会保存来源 provider、模型和生成它的 ProcessingJob ID
 - audio element 加载到有效时长
 - Electron application menu 已移除

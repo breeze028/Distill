@@ -22,7 +22,7 @@ pnpm setup:stt
 pnpm dev
 ```
 
-如果未设置 `DISTILL_PYTHON_COMMAND`，应用会优先使用源码目录下的 `python\.venv\Scripts\python.exe`。
+如果未设置 `DISTILL_PYTHON_COMMAND`，应用会优先使用源码目录下的 `python\.venv\Scripts\python.exe`。从 `out\distill-win32-x64\distill.exe` 手动启动打包应用时，也会从 packaged `resources` 路径回溯到项目 venv。
 
 启用 mock STT 做 UI/数据库流程测试：
 

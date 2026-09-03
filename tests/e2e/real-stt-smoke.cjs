@@ -24,14 +24,12 @@ async function main() {
     fs.rmSync(`${db}${suffix}`, { force: true });
   }
   fs.mkdirSync(path.dirname(db), { recursive: true });
+  const appEnv = { ...process.env, DISTILL_DB_PATH: db };
+  delete appEnv.DISTILL_PYTHON_COMMAND;
 
   const app = await _electron.launch({
     executablePath: exe,
-    env: {
-      ...process.env,
-      DISTILL_DB_PATH: db,
-      DISTILL_PYTHON_COMMAND: python
-    }
+    env: appEnv
   });
 
   try {
@@ -43,6 +41,10 @@ async function main() {
       speechModel: 'faster-whisper-tiny',
       autoTranscribeOnImport: true
     }));
+    const status = await win.evaluate(() => window.distillAPI.getSpeechToTextStatus());
+    if (!status.ready || status.pythonCommand === 'python') {
+      throw new Error(`Expected packaged app to auto-detect the source-tree Python venv, got: ${JSON.stringify(status)}`);
+    }
 
     const imported = await win.evaluate((filePath) => window.distillAPI.importRecordingFromPath(filePath), audio);
     await waitForTranscript(win, imported.recording.id, 120000);

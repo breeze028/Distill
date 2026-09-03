@@ -8,18 +8,25 @@ import { PythonSpeechToTextService } from '@main/stt/pythonSpeechToTextService';
 let tmpDir = '';
 const originalCwd = process.cwd();
 const originalPythonCommand = process.env.DISTILL_PYTHON_COMMAND;
+const originalResourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
 
 beforeEach(() => {
-  delete process.env.DISTILL_PYTHON_COMMAND;
+  Reflect.deleteProperty(process.env, 'DISTILL_PYTHON_COMMAND');
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'distill-python-stt-'));
 });
 
 afterEach(() => {
   process.chdir(originalCwd);
   if (originalPythonCommand === undefined) {
-    delete process.env.DISTILL_PYTHON_COMMAND;
+    Reflect.deleteProperty(process.env, 'DISTILL_PYTHON_COMMAND');
   } else {
     process.env.DISTILL_PYTHON_COMMAND = originalPythonCommand;
+  }
+  if (originalResourcesPath) {
+    Object.defineProperty(process, 'resourcesPath', originalResourcesPath);
+  } else {
+    const mutableProcess = process as NodeJS.Process & { resourcesPath?: string };
+    Reflect.deleteProperty(mutableProcess, 'resourcesPath');
   }
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
@@ -120,6 +127,28 @@ describe('PythonSpeechToTextService', () => {
     fs.mkdirSync(venvScripts, { recursive: true });
     fs.writeFileSync(venvPython, '');
     process.chdir(tmpDir);
+
+    const service = new PythonSpeechToTextService({
+      workerPath: path.join(tmpDir, 'missing-worker.py')
+    });
+
+    const status = await service.getStatus();
+
+    expect(status.pythonCommand).toBe(venvPython);
+  });
+
+  it('finds the source-tree virtual environment from a packaged app resources path', async () => {
+    const projectRoot = path.join(tmpDir, 'Distill');
+    const packagedResources = path.join(projectRoot, 'out', 'distill-win32-x64', 'resources');
+    const venvPython = path.join(projectRoot, 'python', '.venv', 'Scripts', 'python.exe');
+    fs.mkdirSync(packagedResources, { recursive: true });
+    fs.mkdirSync(path.dirname(venvPython), { recursive: true });
+    fs.writeFileSync(venvPython, '');
+    process.chdir(path.dirname(packagedResources));
+    Object.defineProperty(process, 'resourcesPath', {
+      configurable: true,
+      value: packagedResources
+    });
 
     const service = new PythonSpeechToTextService({
       workerPath: path.join(tmpDir, 'missing-worker.py')
