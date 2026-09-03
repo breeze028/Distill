@@ -8,6 +8,7 @@ export const ipcChannels = {
   recordingsImportPath: 'recordings:import-path',
   recordingsStartTranscription: 'recordings:start-transcription',
   recordingsTranscribe: 'recordings:transcribe',
+  recordingsStartAIGeneration: 'recordings:start-ai-generation',
   recordingsSearch: 'recordings:search',
   settingsGet: 'settings:get',
   settingsSave: 'settings:save',
@@ -22,6 +23,7 @@ export type DistillApi = {
   getPathForFile(file: File): string;
   startTranscription(id: string): Promise<RecordingDetail>;
   transcribeRecording(id: string): Promise<RecordingDetail>;
+  startAIGeneration(recordingId: string, templateId?: string): Promise<RecordingDetail>;
   searchRecordings(query: string): Promise<RecordingListItem[]>;
   getSettings(): Promise<AppSettings>;
   saveSettings(settings: SaveSettingsRequest): Promise<AppSettings>;

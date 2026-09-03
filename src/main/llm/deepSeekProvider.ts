@@ -4,10 +4,11 @@ import type { LLMProvider, LLMRequest, LLMResponse } from './types';
 export class DeepSeekProvider implements LLMProvider {
   readonly id = 'deepseek';
 
-  constructor(private readonly apiKey: string) {}
+  constructor(private readonly apiKey: string | (() => string)) {}
 
   async generate(request: LLMRequest): Promise<LLMResponse> {
-    if (!this.apiKey) {
+    const apiKey = typeof this.apiKey === 'function' ? this.apiKey() : this.apiKey;
+    if (!apiKey) {
       throw new Error('DeepSeek API key is not configured.');
     }
 
@@ -15,7 +16,7 @@ export class DeepSeekProvider implements LLMProvider {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`
+        Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: request.model,

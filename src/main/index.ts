@@ -7,9 +7,13 @@ import { DatabaseManager } from '@main/database/database';
 import { RecordingRepository } from '@main/repositories/recordingRepository';
 import { FileImportService } from '@main/services/fileImportService';
 import { TranscriptionService } from '@main/services/transcriptionService';
+import { AIArtifactService } from '@main/services/aiArtifactService';
 import { SettingsRepository } from '@main/settings/settingsRepository';
 import { registerIpcHandlers } from '@main/ipc/registerIpc';
 import { builtInTemplates } from '@main/llm/templates';
+import { DeepSeekProvider } from '@main/llm/deepSeekProvider';
+import { MockLLMProvider } from '@main/llm/mockProvider';
+import { SelectableLLMProvider } from '@main/llm/selectableLLMProvider';
 import { logger } from '@main/logging/logger';
 import { MockSpeechToTextService } from '@main/stt/mockSpeechToTextService';
 import { PythonSpeechToTextService } from '@main/stt/pythonSpeechToTextService';
@@ -77,13 +81,18 @@ app.whenReady().then(() => {
     python: new PythonSpeechToTextService({ modelName: () => settings.getSettings().speechModel })
   });
   const transcriber = new TranscriptionService(recordings, speechToText);
+  const llm = new SelectableLLMProvider(settings, {
+    deepseek: new DeepSeekProvider(() => settings.getSecret('deepSeekApiKey')),
+    mock: new MockLLMProvider()
+  });
+  const aiArtifacts = new AIArtifactService(recordings, llm, settings);
 
   const recoveredJobCount = recordings.recoverInterruptedJobs();
   if (recoveredJobCount > 0) {
     logger.warn('ProcessingJob', 'Recovered interrupted jobs on startup', { recoveredJobCount });
   }
   recordings.ensureBuiltInTemplates([...builtInTemplates]);
-  registerIpcHandlers({ recordings, importer, transcriber, settings, speechToText });
+  registerIpcHandlers({ recordings, importer, transcriber, aiArtifacts, settings, speechToText });
   registerAudioProtocol();
   createWindow();
 

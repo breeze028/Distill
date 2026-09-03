@@ -8,12 +8,16 @@ let tmpDir = '';
 let dbManager: DatabaseManager;
 const originalEnv = {
   DISTILL_ALLOW_MOCK_STT: process.env.DISTILL_ALLOW_MOCK_STT,
-  DISTILL_STT_PROVIDER: process.env.DISTILL_STT_PROVIDER
+  DISTILL_STT_PROVIDER: process.env.DISTILL_STT_PROVIDER,
+  DISTILL_ALLOW_MOCK_LLM: process.env.DISTILL_ALLOW_MOCK_LLM,
+  DISTILL_LLM_PROVIDER: process.env.DISTILL_LLM_PROVIDER
 };
 
 beforeEach(() => {
   delete process.env.DISTILL_ALLOW_MOCK_STT;
   delete process.env.DISTILL_STT_PROVIDER;
+  delete process.env.DISTILL_ALLOW_MOCK_LLM;
+  delete process.env.DISTILL_LLM_PROVIDER;
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'distill-settings-'));
   dbManager = new DatabaseManager(path.join(tmpDir, 'test.db'), path.join(process.cwd(), 'src', 'main', 'database', 'migrations'));
 });
@@ -31,6 +35,7 @@ describe('SettingsRepository', () => {
 
     const settings = repository.getSettings();
 
+    expect(settings.aiProvider).toBe('deepseek');
     expect(settings.speechProvider).toBe('python');
     expect(settings.speechModel).toBe('faster-whisper-tiny');
     expect(settings.mockSpeechProviderEnabled).toBe(false);
@@ -56,6 +61,17 @@ describe('SettingsRepository', () => {
     expect(settings.speechProvider).toBe('mock');
     expect(settings.mockSpeechProviderEnabled).toBe(true);
   });
+
+  it('keeps mock LLM available only for explicit test and development runs', async () => {
+    const db = dbManager.open();
+    db.prepare('INSERT INTO app_setting (key, value, updated_at) VALUES (?, ?, ?)').run('aiProvider', 'mock', new Date().toISOString());
+    let repository = await createRepository();
+    expect(repository.getSettings().aiProvider).toBe('deepseek');
+
+    process.env.DISTILL_LLM_PROVIDER = 'mock';
+    repository = await createRepository();
+    expect(repository.getSettings().aiProvider).toBe('mock');
+  });
 });
 
 async function createRepository() {
@@ -67,9 +83,14 @@ async function createRepository() {
 function restoreEnv(): void {
   setOptionalEnv('DISTILL_ALLOW_MOCK_STT', originalEnv.DISTILL_ALLOW_MOCK_STT);
   setOptionalEnv('DISTILL_STT_PROVIDER', originalEnv.DISTILL_STT_PROVIDER);
+  setOptionalEnv('DISTILL_ALLOW_MOCK_LLM', originalEnv.DISTILL_ALLOW_MOCK_LLM);
+  setOptionalEnv('DISTILL_LLM_PROVIDER', originalEnv.DISTILL_LLM_PROVIDER);
 }
 
-function setOptionalEnv(key: 'DISTILL_ALLOW_MOCK_STT' | 'DISTILL_STT_PROVIDER', value: string | undefined): void {
+function setOptionalEnv(
+  key: 'DISTILL_ALLOW_MOCK_STT' | 'DISTILL_STT_PROVIDER' | 'DISTILL_ALLOW_MOCK_LLM' | 'DISTILL_LLM_PROVIDER',
+  value: string | undefined
+): void {
   if (value === undefined) {
     delete process.env[key];
     return;

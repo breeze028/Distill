@@ -3,7 +3,7 @@ import type { AppSettings, SpeechToTextProvider } from '@shared/types/domain';
 import type { SaveSettingsRequest } from '@shared/schemas/ipc';
 
 const defaults: AppSettings = {
-  aiProvider: 'deepseek',
+  aiProvider: defaultAIProvider(),
   deepSeekApiKeyConfigured: Boolean(process.env.DEEPSEEK_API_KEY),
   deepSeekModel: 'deepseek-chat',
   watchFolder: '',
@@ -21,7 +21,7 @@ export class SettingsRepository {
     const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
 
     return {
-      aiProvider: values.aiProvider ?? defaults.aiProvider,
+      aiProvider: normalizeAIProvider(values.aiProvider),
       deepSeekApiKeyConfigured: Boolean(values.deepSeekApiKey) || defaults.deepSeekApiKeyConfigured,
       deepSeekModel: values.deepSeekModel ?? defaults.deepSeekModel,
       watchFolder: values.watchFolder ?? defaults.watchFolder,
@@ -62,6 +62,20 @@ function defaultSpeechProvider(): SpeechToTextProvider {
   return process.env.DISTILL_STT_PROVIDER === 'mock' && isMockSpeechToTextAllowed() ? 'mock' : 'python';
 }
 
+function defaultAIProvider(): string {
+  return process.env.DISTILL_LLM_PROVIDER === 'mock' && isMockLLMAllowed() ? 'mock' : 'deepseek';
+}
+
+function normalizeAIProvider(value: string | undefined): string {
+  if (value === 'mock' && isMockLLMAllowed()) {
+    return 'mock';
+  }
+  if (value === 'mock') {
+    return 'deepseek';
+  }
+  return value === 'deepseek' ? 'deepseek' : defaults.aiProvider;
+}
+
 function normalizeSpeechProvider(value: string | undefined): SpeechToTextProvider {
   if (value === 'mock' && isMockSpeechToTextAllowed()) {
     return 'mock';
@@ -74,4 +88,8 @@ function normalizeSpeechProvider(value: string | undefined): SpeechToTextProvide
 
 function isMockSpeechToTextAllowed(): boolean {
   return process.env.DISTILL_ALLOW_MOCK_STT === 'true' || process.env.DISTILL_STT_PROVIDER === 'mock';
+}
+
+function isMockLLMAllowed(): boolean {
+  return process.env.DISTILL_ALLOW_MOCK_LLM === 'true' || process.env.DISTILL_LLM_PROVIDER === 'mock';
 }

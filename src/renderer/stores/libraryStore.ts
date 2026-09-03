@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppSettings, RecordingDetail, RecordingListItem, SpeechToTextStatus } from '@shared/types/domain';
+import type { AppSettings, ProcessingJobKind, RecordingDetail, RecordingListItem, SpeechToTextStatus } from '@shared/types/domain';
 
 type ViewMode = 'library' | 'inbox' | 'settings';
 
@@ -14,6 +14,7 @@ type LibraryState = {
   importing: boolean;
   checkingSpeechToText: boolean;
   transcribingIds: Record<string, boolean>;
+  generatingArtifactIds: Record<string, boolean>;
   error: string | null;
   load(): Promise<void>;
   selectRecording(id: string): Promise<void>;
@@ -21,13 +22,14 @@ type LibraryState = {
   importFromPath(filePath: string): Promise<void>;
   importFromPaths(filePaths: string[]): Promise<void>;
   transcribeRecording(id: string): Promise<void>;
+  generateArtifact(id: string, templateId?: string): Promise<void>;
   search(query: string): Promise<void>;
   showLibrary(): void;
   showInbox(): Promise<void>;
   showSettings(): Promise<void>;
   saveSettings(settings: Parameters<typeof window.distillAPI.saveSettings>[0]): Promise<void>;
   refreshSpeechToTextStatus(): Promise<void>;
-  pollRecordingUntilIdle(id: string): Promise<void>;
+  pollRecordingUntilIdle(id: string, kind: ProcessingJobKind): Promise<void>;
 };
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
@@ -41,6 +43,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   importing: false,
   checkingSpeechToText: false,
   transcribingIds: {},
+  generatingArtifactIds: {},
   error: null,
 
   async load() {
@@ -82,7 +85,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         const recordings = await window.distillAPI.listRecordings();
         set({ recordings, selectedRecording: result.recording });
         if (hasRunningTranscription(result.recording)) {
-          void get().pollRecordingUntilIdle(result.recording.id);
+          void get().pollRecordingUntilIdle(result.recording.id, 'transcription');
         }
       }
     } catch (error) {
@@ -99,7 +102,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       const recordings = await window.distillAPI.listRecordings();
       set({ recordings, selectedRecording: result.recording });
       if (hasRunningTranscription(result.recording)) {
-        void get().pollRecordingUntilIdle(result.recording.id);
+        void get().pollRecordingUntilIdle(result.recording.id, 'transcription');
       }
     } catch (error) {
       set({ error: toMessage(error) });
@@ -121,7 +124,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         const result = await window.distillAPI.importRecordingFromPath(filePath);
         selectedRecording = result.recording;
         if (hasRunningTranscription(result.recording)) {
-          void get().pollRecordingUntilIdle(result.recording.id);
+          void get().pollRecordingUntilIdle(result.recording.id, 'transcription');
         }
       }
 
@@ -144,7 +147,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       const recording = await window.distillAPI.startTranscription(id);
       const recordings = await window.distillAPI.listRecordings();
       set({ recordings, selectedRecording: recording });
-      void get().pollRecordingUntilIdle(id);
+      void get().pollRecordingUntilIdle(id, 'transcription');
     } catch (error) {
       const recording = await window.distillAPI.getRecording(id).catch(() => null);
       const recordings = await window.distillAPI.listRecordings().catch(() => get().recordings);
@@ -153,6 +156,29 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       set((state) => {
         const { [id]: _finished, ...remaining } = state.transcribingIds;
         return { transcribingIds: remaining };
+      });
+    }
+  },
+
+  async generateArtifact(id, templateId = 'default-summary') {
+    set((state) => ({
+      generatingArtifactIds: { ...state.generatingArtifactIds, [id]: true },
+      error: null,
+      viewMode: 'library'
+    }));
+    try {
+      const recording = await window.distillAPI.startAIGeneration(id, templateId);
+      const recordings = await window.distillAPI.listRecordings();
+      set({ recordings, selectedRecording: recording });
+      void get().pollRecordingUntilIdle(id, 'ai');
+    } catch (error) {
+      const recording = await window.distillAPI.getRecording(id).catch(() => null);
+      const recordings = await window.distillAPI.listRecordings().catch(() => get().recordings);
+      set({ error: toMessage(error), selectedRecording: recording, recordings });
+    } finally {
+      set((state) => {
+        const { [id]: _finished, ...remaining } = state.generatingArtifactIds;
+        return { generatingArtifactIds: remaining };
       });
     }
   },
@@ -223,10 +249,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     }
   },
 
-  async pollRecordingUntilIdle(id) {
-    set((state) => ({
-      transcribingIds: { ...state.transcribingIds, [id]: true }
-    }));
+  async pollRecordingUntilIdle(id, kind) {
+    set((state) => setRunningState(state, kind, id, true));
 
     try {
       for (let attempt = 0; attempt < 120; attempt += 1) {
@@ -240,17 +264,14 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           selectedRecording: get().selectedRecording?.id === id ? recording : get().selectedRecording
         });
 
-        if (!recording || !hasRunningTranscription(recording)) {
+        if (!recording || !hasRunningJob(recording, kind)) {
           break;
         }
       }
     } catch (error) {
       set({ error: toMessage(error) });
     } finally {
-      set((state) => {
-        const { [id]: _finished, ...remaining } = state.transcribingIds;
-        return { transcribingIds: remaining };
-      });
+      set((state) => setRunningState(state, kind, id, false));
     }
   }
 }));
@@ -260,7 +281,27 @@ function toMessage(error: unknown): string {
 }
 
 function hasRunningTranscription(recording: RecordingDetail): boolean {
-  return recording.jobs.some((job) => job.kind === 'transcription' && job.state === 'running');
+  return hasRunningJob(recording, 'transcription');
+}
+
+function hasRunningJob(recording: RecordingDetail, kind: ProcessingJobKind): boolean {
+  return recording.jobs.some((job) => job.kind === kind && job.state === 'running');
+}
+
+function setRunningState(state: LibraryState, kind: ProcessingJobKind, id: string, running: boolean): Partial<LibraryState> {
+  if (kind === 'transcription') {
+    const { [id]: _finished, ...remaining } = state.transcribingIds;
+    return {
+      transcribingIds: running ? { ...state.transcribingIds, [id]: true } : remaining
+    };
+  }
+  if (kind === 'ai') {
+    const { [id]: _finished, ...remaining } = state.generatingArtifactIds;
+    return {
+      generatingArtifactIds: running ? { ...state.generatingArtifactIds, [id]: true } : remaining
+    };
+  }
+  return {};
 }
 
 function delay(ms: number): Promise<void> {

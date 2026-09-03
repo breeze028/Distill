@@ -25,6 +25,8 @@ Renderer 是 React UI，使用 Zustand 管理应用状态。Renderer 只能调�
 
 手动 Retranscribe 使用 `recordings:start-transcription` 立即创建后台 `ProcessingJob` 并返回最新 Recording，Renderer 通过轮询刷新任务状态；同步 `recordings:transcribe` 仍保留给测试和内部调用。
 
+AI 笔记生成使用 `recordings:start-ai-generation`。Renderer 只提交 recording id 和 template id；Main 负责读取 Transcript、选择内置模板、调用 `LLMProvider`、写入 `AIArtifact`，并用 `ProcessingJob(kind='ai')` 记录状态。正常默认 provider 是 DeepSeek，自动化测试可显式启用 mock LLM。
+
 ## 数据库
 
 初始 schema 包含：

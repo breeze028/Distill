@@ -9,6 +9,7 @@ const api: DistillApi = {
   getPathForFile: (file) => webUtils.getPathForFile(file),
   startTranscription: (id) => ipcRenderer.invoke(ipcChannels.recordingsStartTranscription, id),
   transcribeRecording: (id) => ipcRenderer.invoke(ipcChannels.recordingsTranscribe, id),
+  startAIGeneration: (recordingId, templateId = 'default-summary') => ipcRenderer.invoke(ipcChannels.recordingsStartAIGeneration, { recordingId, templateId }),
   searchRecordings: (query) => ipcRenderer.invoke(ipcChannels.recordingsSearch, query),
   getSettings: () => ipcRenderer.invoke(ipcChannels.settingsGet),
   saveSettings: (settings) => ipcRenderer.invoke(ipcChannels.settingsSave, settings),

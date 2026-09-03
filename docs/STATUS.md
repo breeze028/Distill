@@ -16,6 +16,10 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 
 状态：进行中。
 
+Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭环。
+
+状态：已启动。
+
 ## 已完成
 
 - 初始化 Electron + React + TypeScript + Vite 桌面应用。
@@ -64,6 +68,11 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - Recording Detail 会识别旧 mock/占位 transcript，并提示使用 Python Worker 重新转写。
 - Recording Detail 在转写运行中会显示已耗时，并提示首次模型下载/加载可能导致等待变长。
 - 手动 Retranscribe 会先创建新的后台 `ProcessingJob` 并立即刷新 UI，处理耗时从本次任务开始计算。
+- 新增 `AIArtifactService`，可基于已有 Transcript 和内置模板生成结构化 AI 笔记。
+- 新增 `recordings:start-ai-generation` IPC，Renderer 可触发后台 AI 生成任务。
+- 新增 `SelectableLLMProvider`，正常默认走 DeepSeek，测试/开发可显式启用 mock LLM。
+- Recording Detail 的 Summary 区域已增加 Generate/Regenerate Notes 入口。
+- AI 笔记生成会创建 `ProcessingJob(kind='ai')`，运行中显示耗时，成功后写入 `AIArtifact`，失败后显示错误并可重试。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -73,10 +82,10 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - Renderer 不直接访问 Node、SQLite、文件系统或 API Key。
 - Main process 负责数据库、导入、设置、音频协议、未来 LLM provider、未来 STT worker。
 - `LLMProvider` 已定义，并有 `DeepSeekProvider` 初始实现。
+- `LLMProvider` 已接入应用启动流程，并通过 settings 在 DeepSeek/mock provider 间选择。
 - `SpeechToTextService` 已定义，并有 Python Worker 实现骨架与 mock 实现。
 - `AIArtifact` 数据模型已建立，避免把 AI 输出写死为 `Recording.summary`。
-- `ProcessingJob` 表已建立，但导入以外的长任务状态流转还未完整接入。
-- 转写任务已开始使用 `ProcessingJob`，AI 生成任务尚未接入。
+- `ProcessingJob` 表已建立，转写任务和 AI 笔记生成任务都已开始接入。
 
 ## 验证记录
 
@@ -115,6 +124,10 @@ pnpm dev
 - Transcript 面板使用稳定、可见 scrollbar；已用 75 秒、36 段 mock transcript 验证右栏可滚动
 - 点击 transcript segment 会 seek 到对应音频时间点；已验证 `distill-audio://` Range fetch 返回 206，点击第 30 秒附近 segment 后播放器源包含 `#t=30.000`，进入约 31.67 秒且保持播放
 - 点击 Retranscribe 会立即显示新任务的运行耗时
+- 点击 Generate Notes 会立即显示 AI 生成任务耗时
+- mock LLM 生成的 `AIArtifact` 可在详情页 Summary 区展示并持久化
+- AI 生成任务成功/失败会写入 `ProcessingJob`
+- LLM provider 选择默认使用 DeepSeek，mock LLM 只在显式测试/开发环境启用
 - packaged app 导入中文 `.m4a`，并使用 Python Worker + faster-whisper tiny 生成中文真实 transcript
 - packaged app 在不注入 `DISTILL_PYTHON_COMMAND` 时也能自动发现项目 Python venv
 - transcript 会保存来源 provider、模型和生成它的 ProcessingJob ID
@@ -128,9 +141,9 @@ pnpm dev
 - 首次真实 faster-whisper 转写需要用户本机安装 Python 依赖并下载模型。
 - `small`/`medium` 模型在 CPU 上可能明显慢于 `tiny`，短录音默认建议使用 `tiny`。
 - 旧版本已经生成的 mock/占位 transcript 不会被自动删除，需要用户点击 Retranscribe 生成真实内容。
-- DeepSeek 尚未接入真实生成流程。
+- DeepSeek provider 已接入生成主干，但真实 API smoke 仍需要通过本地密钥配置单独验证。
 - Watch Folder 只有设置入口和 Inbox 页面占位，尚未实现文件监听。
-- `ProcessingJob` 还没有覆盖 AI 生成的完整状态流转。
+- `ProcessingJob` 已覆盖 AI 笔记生成的基础状态流转；更细的 token/费用/重试策略尚未设计。
 - Settings 中 API Key 暂存在 SQLite，未来需要替换为 Windows 安全存储方案。
 - Forge packaging 为了 Phase 0 中诊断 `better-sqlite3` 原生依赖，暂时关闭 `asar`。
 - 当前 UI 文案仍有较多英文，后续可以逐步中文化或引入轻量 i18n。

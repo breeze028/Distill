@@ -32,6 +32,8 @@ async function main() {
   let hasTranscriptScrollbar = false;
   let retranscribeStartedFresh = false;
   let retranscribeProgressVisible = false;
+  let aiGenerationStartedFresh = false;
+  let aiGenerationProgressVisible = false;
 
   try {
     const win = await app.firstWindow();
@@ -83,6 +85,18 @@ async function main() {
       const styles = window.getComputedStyle(element);
       return styles.overflowY === 'scroll' && styles.scrollbarGutter.includes('stable') && element.scrollHeight > element.clientHeight;
     });
+    const detailBeforeGenerate = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
+    const previousAIJobId = detailBeforeGenerate.jobs.find((job) => job.kind === 'ai')?.id;
+    await win.getByRole('button', { name: 'Generate Notes' }).click();
+    await win.getByText(/Generating Notes · 00:0[0-3]/).waitFor();
+    aiGenerationProgressVisible = true;
+    const detailDuringGenerate = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
+    const runningAIJob = detailDuringGenerate.jobs.find((job) => job.kind === 'ai' && job.state === 'running');
+    aiGenerationStartedFresh = Boolean(runningAIJob && runningAIJob.id !== previousAIJobId);
+    if (runningAIJob) {
+      await waitForProcessingJob(win, imported.recording.id, runningAIJob.id, 30000);
+    }
+    await win.getByText('整理自 default-summary 模板的模拟 AI 笔记。').waitFor();
 
     const detailBeforeRetranscribe = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
     const previousJobId = detailBeforeRetranscribe.jobs.find((job) => job.kind === 'transcription')?.id;
@@ -125,7 +139,7 @@ async function main() {
     await win.waitForLoadState('domcontentloaded');
     await win.waitForTimeout(1000);
     await win.getByText('phase1-transcript-long-中文-test').first().click();
-    await win.getByText('这是第一阶段的模拟转写', { exact: false }).waitFor();
+    await win.getByTestId('transcript-row').filter({ hasText: '这是第一阶段的模拟转写' }).first().waitFor();
     reopenedText = await win.locator('body').innerText();
   } finally {
     await reopenedApp.close();
@@ -151,10 +165,13 @@ async function main() {
         hasTranscriptScrollbar,
         retranscribeStartedFresh,
         retranscribeProgressVisible,
+        aiGenerationStartedFresh,
+        aiGenerationProgressVisible,
         hasLibraryText: text.includes('Voice Library'),
         hasDetailText: text.includes('phase1-transcript-long-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
         autoTranscribedAfterImport: Boolean(imported.recording.jobs.find((job) => job.kind === 'transcription')),
+        hasGeneratedAIArtifact: text.includes('整理自 default-summary 模板的模拟 AI 笔记。'),
         hasTranscriptText: text.includes('这是第一阶段的模拟转写'),
         hasPersistedTranscriptAfterReopen: reopenedText.includes('这是第一阶段的模拟转写')
       },
@@ -199,6 +216,12 @@ async function main() {
   if (!retranscribeProgressVisible) {
     throw new Error('Expected Retranscribe progress to be visible immediately.');
   }
+  if (!aiGenerationStartedFresh) {
+    throw new Error('Expected Generate Notes to create a fresh running AI job.');
+  }
+  if (!aiGenerationProgressVisible) {
+    throw new Error('Expected Generate Notes progress to be visible immediately.');
+  }
   if (!appMenuRemoved) {
     throw new Error('Expected Electron application menu to be removed.');
   }
@@ -213,6 +236,9 @@ async function main() {
   }
   if (!imported.recording.jobs.some((job) => job.kind === 'transcription')) {
     throw new Error('Expected import to start a transcription job automatically.');
+  }
+  if (!text.includes('整理自 default-summary 模板的模拟 AI 笔记。')) {
+    throw new Error('Generated AI artifact summary was not visible.');
   }
   if (!text.includes('这是第一阶段的模拟转写')) {
     throw new Error('Transcript segment text was not visible after transcription.');
@@ -262,7 +288,10 @@ function launchApp(exe, db) {
       DISTILL_STT_PROVIDER: 'mock',
       DISTILL_ALLOW_MOCK_STT: 'true',
       DISTILL_MOCK_STT_DELAY_MS: '1500',
-      DISTILL_MOCK_STT_SEGMENT_COUNT: '36'
+      DISTILL_MOCK_STT_SEGMENT_COUNT: '36',
+      DISTILL_LLM_PROVIDER: 'mock',
+      DISTILL_ALLOW_MOCK_LLM: 'true',
+      DISTILL_MOCK_LLM_DELAY_MS: '1500'
     }
   });
 }
@@ -288,6 +317,10 @@ async function waitForTranscript(win, recordingId, timeoutMs) {
 }
 
 async function waitForTranscriptJob(win, recordingId, jobId, timeoutMs) {
+  return waitForProcessingJob(win, recordingId, jobId, timeoutMs);
+}
+
+async function waitForProcessingJob(win, recordingId, jobId, timeoutMs) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const recording = await win.evaluate((id) => window.distillAPI.getRecording(id), recordingId);
@@ -302,7 +335,7 @@ async function waitForTranscriptJob(win, recordingId, jobId, timeoutMs) {
     await win.waitForTimeout(500);
   }
 
-  throw new Error(`Timed out waiting for transcription job ${jobId}.`);
+  throw new Error(`Timed out waiting for processing job ${jobId}.`);
 }
 
 function ensureAudioFixture(audioPath, durationSeconds) {

@@ -18,12 +18,14 @@ export function App() {
     importing,
     checkingSpeechToText,
     transcribingIds,
+    generatingArtifactIds,
     error,
     load,
     selectRecording,
     importFromDialog,
     importFromPaths,
     transcribeRecording,
+    generateArtifact,
     search,
     showLibrary,
     showInbox,
@@ -123,8 +125,10 @@ export function App() {
             recording={selectedRecording}
             importing={importing}
             isTranscribing={selectedRecording ? Boolean(transcribingIds[selectedRecording.id]) : false}
+            isGeneratingArtifact={selectedRecording ? Boolean(generatingArtifactIds[selectedRecording.id]) : false}
             onImport={() => void importFromDialog()}
             onTranscribe={(id) => void transcribeRecording(id)}
+            onGenerateArtifact={(id) => void generateArtifact(id)}
           />
         )}
       </main>
@@ -319,8 +323,10 @@ function RecordingDetailPane(props: {
   recording: RecordingDetail | null;
   importing: boolean;
   isTranscribing: boolean;
+  isGeneratingArtifact: boolean;
   onImport(): void;
   onTranscribe(id: string): void;
+  onGenerateArtifact(id: string): void;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -357,7 +363,11 @@ function RecordingDetailPane(props: {
   const recording = props.recording;
   const transcriptionJob = getLatestTranscriptionJob(recording);
   const transcriptionError = transcriptionJob?.state === 'failed' ? transcriptionJob : null;
-  const isTranscribing = props.isTranscribing || transcriptionJob?.state === 'running' || recording.processingState === 'running';
+  const isTranscribing = props.isTranscribing || transcriptionJob?.state === 'running';
+  const aiJob = getLatestAIJob(recording);
+  const aiError = aiJob?.state === 'failed' ? aiJob : null;
+  const isGeneratingArtifact = props.isGeneratingArtifact || aiJob?.state === 'running';
+  const canGenerateArtifact = Boolean(recording.transcript) && !isTranscribing;
 
   return (
     <article className="flex h-full min-h-0 min-w-0 flex-col">
@@ -406,15 +416,35 @@ function RecordingDetailPane(props: {
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,420px)_1fr]">
         <section className="min-w-0 overflow-y-auto border-r border-border px-8 py-6">
-          <SectionTitle title="Summary" />
+          <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+            <SectionTitle title="Summary" />
+            {canGenerateArtifact ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => props.onGenerateArtifact(recording.id)}
+                disabled={isGeneratingArtifact}
+                title={recording.latestArtifact ? 'Regenerate AI notes' : 'Generate AI notes'}
+              >
+                {isGeneratingArtifact ? 'Generating...' : recording.latestArtifact ? 'Regenerate Notes' : 'Generate Notes'}
+              </Button>
+            ) : null}
+          </div>
+          {aiError ? (
+            <JobErrorNotice job={aiError} disabled={isGeneratingArtifact || !canGenerateArtifact} onRetry={() => props.onGenerateArtifact(recording.id)} />
+          ) : isGeneratingArtifact && aiJob ? (
+            <AIProgressNotice job={aiJob} />
+          ) : null}
           {recording.latestArtifact ? (
-            <div className="space-y-6 text-sm leading-6">
+            <div className="mt-4 space-y-6 text-sm leading-6">
               <p>{recording.latestArtifact.content.summary}</p>
               <NoteList title="Key Points" items={recording.latestArtifact.content.keyPoints} />
               <NoteList title="Todos" items={recording.latestArtifact.content.todos} />
             </div>
           ) : (
-            <EmptySection text="AI summary is not generated yet. The LLM provider interface and artifact model are ready for the next phase." />
+            <div className="mt-4">
+              <EmptySection text={recording.transcript ? 'AI 笔记尚未生成。点击 Generate Notes 可以基于当前 transcript 生成结构化笔记。' : '先完成转写后，才能生成 AI 笔记。'} />
+            </div>
           )}
         </section>
 
@@ -500,6 +530,28 @@ function TranscriptionProgressNotice(props: { job: ProcessingJob }) {
       <div className="min-w-0">
         <div className="font-medium">Transcribing · {formatDuration(elapsedSeconds)}</div>
         <p className="mt-1 leading-6 text-muted-foreground">{message}</p>
+      </div>
+    </div>
+  );
+}
+
+function AIProgressNotice(props: { job: ProcessingJob }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const startedAt = props.job.startedAt ?? props.job.createdAt;
+  const elapsedSeconds = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
+
+  return (
+    <div className="mt-4 flex items-start gap-2 rounded border border-border bg-background px-3 py-3 text-sm">
+      <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+      <div className="min-w-0">
+        <div className="font-medium">Generating Notes · {formatDuration(elapsedSeconds)}</div>
+        <p className="mt-1 leading-6 text-muted-foreground">正在根据 transcript 生成结构化 AI 笔记。</p>
       </div>
     </div>
   );
@@ -628,6 +680,10 @@ function waitForPlayableData(audio: HTMLAudioElement, targetTime: number): Promi
 
 function getLatestTranscriptionJob(recording: RecordingDetail): ProcessingJob | null {
   return recording.jobs.find((job) => job.kind === 'transcription') ?? null;
+}
+
+function getLatestAIJob(recording: RecordingDetail): ProcessingJob | null {
+  return recording.jobs.find((job) => job.kind === 'ai') ?? null;
 }
 
 function isMockTranscript(recording: RecordingDetail): boolean {

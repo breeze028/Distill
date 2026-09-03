@@ -1,9 +1,10 @@
 import { dialog, ipcMain } from 'electron';
 import { ipcChannels } from '@shared/ipc';
 import type { ImportRecordingResult } from '@shared/types/domain';
-import { importRecordingRequestSchema, saveSettingsRequestSchema } from '@shared/schemas/ipc';
+import { generateAIArtifactRequestSchema, importRecordingRequestSchema, saveSettingsRequestSchema } from '@shared/schemas/ipc';
 import type { FileImportService } from '@main/services/fileImportService';
 import type { TranscriptionService } from '@main/services/transcriptionService';
+import type { AIArtifactService } from '@main/services/aiArtifactService';
 import type { RecordingRepository } from '@main/repositories/recordingRepository';
 import type { SettingsRepository } from '@main/settings/settingsRepository';
 import type { SpeechToTextService } from '@main/stt/types';
@@ -12,6 +13,7 @@ export function registerIpcHandlers(dependencies: {
   recordings: RecordingRepository;
   importer: FileImportService;
   transcriber: TranscriptionService;
+  aiArtifacts: AIArtifactService;
   settings: SettingsRepository;
   speechToText: SpeechToTextService;
 }): void {
@@ -53,6 +55,11 @@ export function registerIpcHandlers(dependencies: {
   ipcMain.handle(ipcChannels.recordingsStartTranscription, (_event, id: string) => dependencies.transcriber.startTranscription(id));
 
   ipcMain.handle(ipcChannels.recordingsTranscribe, (_event, id: string) => dependencies.transcriber.transcribeRecording(id));
+
+  ipcMain.handle(ipcChannels.recordingsStartAIGeneration, (_event, input: unknown) => {
+    const parsed = generateAIArtifactRequestSchema.parse(input);
+    return dependencies.aiArtifacts.startGeneration(parsed.recordingId, parsed.templateId);
+  });
 
   ipcMain.handle(ipcChannels.recordingsSearch, (_event, query: string) => dependencies.recordings.search(query));
 
