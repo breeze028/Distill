@@ -33,13 +33,7 @@ async function main() {
     appMenuRemoved = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null);
 
     imported = await win.evaluate((filePath) => window.distillAPI.importRecordingFromPath(filePath), audio);
-    await win.waitForFunction(
-      async (recordingId) => {
-        const recording = await window.distillAPI.getRecording(recordingId);
-        return Boolean(recording?.transcript?.segments.length);
-      },
-      imported.recording.id
-    );
+    await waitForTranscript(win, imported.recording.id, 30000);
     await win.evaluate(() => window.location.reload());
     await win.waitForLoadState('domcontentloaded');
     await win.waitForTimeout(1000);
@@ -156,6 +150,26 @@ function launchApp(exe, db) {
       DISTILL_DB_PATH: db
     }
   });
+}
+
+async function waitForTranscript(win, recordingId, timeoutMs) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const recording = await win.evaluate((id) => window.distillAPI.getRecording(id), recordingId);
+    if (recording?.transcript?.segments.length) {
+      return recording;
+    }
+
+    const failedJob = recording?.jobs.find((job) => job.kind === 'transcription' && job.state === 'failed');
+    if (failedJob) {
+      throw new Error(`Transcription failed: ${failedJob.errorMessage}`);
+    }
+
+    await win.waitForTimeout(500);
+  }
+
+  const recording = await win.evaluate((id) => window.distillAPI.getRecording(id), recordingId);
+  throw new Error(`Timed out waiting for transcript. Last processing state: ${recording?.processingState ?? 'missing'}`);
 }
 
 function ensureAudioFixture(audioPath, durationSeconds) {

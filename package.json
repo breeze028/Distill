@@ -14,6 +14,8 @@
     "test": "pnpm rebuild:node-native && vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "setup:stt": "powershell -ExecutionPolicy Bypass -File scripts/setup-stt.ps1",
+    "smoke:stt": "node tests/e2e/real-stt-smoke.cjs",
     "rebuild:node-native": "pnpm rebuild better-sqlite3"
   },
   "dependencies": {

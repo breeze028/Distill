@@ -50,6 +50,8 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - Recording Detail 会显示最近一次转写失败原因，并提供重试入口。
 - Settings 已增加 STT 状态检查入口，可以显示当前 provider、模型、Python 命令、worker 路径、Python 版本和 faster-whisper 可用性。
 - Settings 已增加 STT provider 选择，转写和状态检查会按最新设置在 mock/Python Worker 间切换。
+- 新增 `pnpm setup:stt`，用于创建本地 Python venv 并安装 faster-whisper 依赖。
+- 新增 `pnpm smoke:stt`，用于可选验证打包应用里的真实 Python Worker 转写链路。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -71,8 +73,11 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 ```powershell
 pnpm lint
 pnpm test
+python -m py_compile python\worker\worker.py
 pnpm build
 node tests\e2e\phase0-smoke.cjs
+pnpm setup:stt
+pnpm smoke:stt
 pnpm dev
 ```
 
@@ -94,6 +99,7 @@ pnpm dev
 - transcript segment 文本可见
 - 重开打包应用后 transcript 仍然可见
 - 点击 transcript segment 会 seek 到对应音频时间点
+- packaged app 使用 Python Worker + faster-whisper tiny 生成真实 transcript
 - audio element 加载到有效时长
 - Electron application menu 已移除
 - Inbox 和 Settings 可打开/收回

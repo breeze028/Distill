@@ -18,14 +18,19 @@ pnpm build
 启用真实 faster-whisper：
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r python\requirements.txt
-$env:DISTILL_PYTHON_COMMAND = ".\.venv\Scripts\python.exe"
+pnpm setup:stt
+$env:DISTILL_PYTHON_COMMAND = ".\python\.venv\Scripts\python.exe"
 pnpm dev
 ```
 
 然后在 Settings 中把 `Speech-to-Text Provider` 改为 `Python Worker`。
+
+验证打包应用里的真实 STT 链路：
+
+```powershell
+pnpm build
+pnpm smoke:stt
+```
 
 可选环境变量：
 
