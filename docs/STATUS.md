@@ -50,6 +50,7 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - Recording Detail 会显示最近一次转写失败原因，并提供重试入口。
 - Settings 已增加 STT 状态检查入口，可以显示当前 provider、模型、Python 命令、worker 路径、Python 版本和 faster-whisper 可用性。
 - Settings 已增加 STT provider 选择，转写和状态检查会按最新设置在 mock/Python Worker 间切换。
+- Settings 已将默认 STT 模型调整为 `faster-whisper-tiny`，并提供 tiny/base/small/medium 模型选择，优先保证短录音转写速度。
 - 新增 `pnpm setup:stt`，用于创建本地 Python venv 并安装 faster-whisper 依赖。
 - 新增 `pnpm smoke:stt`，用于可选验证打包应用里的真实 Python Worker 转写链路。
 - 应用启动时会恢复遗留的 running `ProcessingJob`，避免转写任务在异常关闭后永久停留在 running。
@@ -58,6 +59,7 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - 正常启动默认使用 Python Worker；mock STT 只在显式设置 `DISTILL_ALLOW_MOCK_STT=true` 或 `DISTILL_STT_PROVIDER=mock` 时开放。
 - Python STT 未显式配置命令时，会优先发现源码目录下的 `python\.venv\Scripts\python.exe`；从 `out\distill-win32-x64\distill.exe` 手动启动打包应用时也会回溯到项目 venv。
 - Recording Detail 会识别旧 mock/占位 transcript，并提示使用 Python Worker 重新转写。
+- Recording Detail 在转写运行中会显示已耗时，并提示首次模型下载/加载可能导致等待变长。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -109,6 +111,7 @@ pnpm dev
 - packaged app 导入中文 `.m4a`，并使用 Python Worker + faster-whisper tiny 生成中文真实 transcript
 - packaged app 在不注入 `DISTILL_PYTHON_COMMAND` 时也能自动发现项目 Python venv
 - transcript 会保存来源 provider、模型和生成它的 ProcessingJob ID
+- 转写运行中 UI 可显示 elapsed time
 - audio element 加载到有效时长
 - Electron application menu 已移除
 - Inbox 和 Settings 可打开/收回
@@ -116,6 +119,7 @@ pnpm dev
 ## 当前已知限制
 
 - 首次真实 faster-whisper 转写需要用户本机安装 Python 依赖并下载模型。
+- `small`/`medium` 模型在 CPU 上可能明显慢于 `tiny`，短录音默认建议使用 `tiny`。
 - 旧版本已经生成的 mock/占位 transcript 不会被自动删除，需要用户点击 Retranscribe 生成真实内容。
 - DeepSeek 尚未接入真实生成流程。
 - Watch Folder 只有设置入口和 Inbox 页面占位，尚未实现文件监听。

@@ -52,7 +52,7 @@ export class PythonSpeechToTextService implements SpeechToTextService {
   constructor(options: PythonSpeechToTextOptions = {}) {
     this.pythonCommand = options.pythonCommand ?? resolveDefaultPythonCommand();
     this.workerPath = options.workerPath ?? resolveDefaultWorkerPath();
-    this.modelName = options.modelName ?? process.env.DISTILL_WHISPER_MODEL ?? 'small';
+    this.modelName = options.modelName ?? process.env.DISTILL_WHISPER_MODEL ?? 'tiny';
     this.device = options.device ?? process.env.DISTILL_WHISPER_DEVICE ?? 'auto';
     this.computeType = options.computeType ?? process.env.DISTILL_WHISPER_COMPUTE_TYPE ?? 'int8';
     this.timeoutMs = options.timeoutMs ?? 30 * 60 * 1000;

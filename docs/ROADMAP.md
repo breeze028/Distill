@@ -40,6 +40,7 @@
 - 保存 `Transcript` 与 `TranscriptSegment`
 - 用 `ProcessingJob` 追踪 pending、running、succeeded、failed
 - UI 显示 Transcribing、Failed、Retry 等状态
+- UI 显示转写 elapsed time，并解释首次模型下载/加载导致的等待
 - 点击 Transcript Segment 后音频 seek 到 segment start time
 - 保留 mock STT 测试，不让自动化测试依赖真实 Whisper 模型
 - 真实用户导入默认走 Python Worker，mock STT 只用于显式测试/开发
@@ -66,6 +67,8 @@
 - 已验证打包应用可通过 Python Worker 生成中文真实 transcript。
 - 已将正常默认 provider 调整为 Python Worker，并把 mock STT 限制为显式环境变量开启。
 - 已给 transcript 增加来源元数据，并在 UI 中提示旧 mock/占位 transcript 需要重新转写。
+- 已将默认模型改为 `faster-whisper-tiny`，并在 Settings 提供常用模型选择。
+- 已在转写运行中显示耗时提示，减少短音频等待时的不确定感。
 
 ## Phase 2：AI Template 与 DeepSeek 结构化笔记
 

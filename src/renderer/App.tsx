@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, FileAudio, FolderOpen, Import, Library, RefreshCw, Search, Settings, Upload, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, FileAudio, FolderOpen, Import, Library, RefreshCw, Search, Settings, Upload, XCircle } from 'lucide-react';
 import type { ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
@@ -291,6 +291,7 @@ function RecordingDetailPane(props: {
   const recording = props.recording;
   const transcriptionJob = getLatestTranscriptionJob(recording);
   const transcriptionError = transcriptionJob?.state === 'failed' ? transcriptionJob : null;
+  const isTranscribing = props.isTranscribing || transcriptionJob?.state === 'running' || recording.processingState === 'running';
 
   return (
     <article className="flex h-full min-w-0 flex-col">
@@ -332,6 +333,8 @@ function RecordingDetailPane(props: {
             disabled={props.isTranscribing}
             onRetry={() => props.onTranscribe(recording.id)}
           />
+        ) : isTranscribing && transcriptionJob ? (
+          <TranscriptionProgressNotice job={transcriptionJob} />
         ) : null}
       </header>
 
@@ -367,7 +370,7 @@ function RecordingDetailPane(props: {
                 />
               ))}
             </div>
-          ) : props.isTranscribing || recording.processingState === 'running' ? (
+          ) : isTranscribing ? (
             <EmptySection text="Transcribing... Transcript segments will appear here after the speech-to-text job completes." />
           ) : (
             <div className="max-w-[520px]">
@@ -412,6 +415,31 @@ function JobErrorNotice(props: { job: ProcessingJob; disabled: boolean; onRetry(
   );
 }
 
+function TranscriptionProgressNotice(props: { job: ProcessingJob }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const startedAt = props.job.startedAt ?? props.job.createdAt;
+  const elapsedSeconds = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
+  const message = elapsedSeconds >= 60
+    ? '仍在运行。首次使用某个 Whisper 模型时，可能正在下载或加载模型。'
+    : '正在转写。短音频通常会在几十秒内完成；首次运行可能更久。';
+
+  return (
+    <div className="mt-4 flex items-start gap-2 rounded border border-border bg-background px-3 py-3 text-sm">
+      <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+      <div className="min-w-0">
+        <div className="font-medium">Transcribing · {formatDuration(elapsedSeconds)}</div>
+        <p className="mt-1 leading-6 text-muted-foreground">{message}</p>
+      </div>
+    </div>
+  );
+}
+
 function getLatestTranscriptionJob(recording: RecordingDetail): ProcessingJob | null {
   return recording.jobs.find((job) => job.kind === 'transcription') ?? null;
 }
@@ -438,16 +466,16 @@ function SettingsPane(props: {
 }) {
   const [watchFolder, setWatchFolder] = useState(props.settings?.watchFolder ?? '');
   const [model, setModel] = useState(props.settings?.deepSeekModel ?? 'deepseek-chat');
-  const [speechProvider, setSpeechProvider] = useState(props.settings?.speechProvider ?? 'mock');
-  const [speechModel, setSpeechModel] = useState(props.settings?.speechModel ?? 'faster-whisper-small');
+  const [speechProvider, setSpeechProvider] = useState(props.settings?.speechProvider ?? 'python');
+  const [speechModel, setSpeechModel] = useState(props.settings?.speechModel ?? 'faster-whisper-tiny');
   const [autoTranscribeOnImport, setAutoTranscribeOnImport] = useState(props.settings?.autoTranscribeOnImport ?? true);
   const [apiKey, setApiKey] = useState('');
 
   useEffect(() => {
     setWatchFolder(props.settings?.watchFolder ?? '');
     setModel(props.settings?.deepSeekModel ?? 'deepseek-chat');
-    setSpeechProvider(props.settings?.speechProvider ?? 'mock');
-    setSpeechModel(props.settings?.speechModel ?? 'faster-whisper-small');
+    setSpeechProvider(props.settings?.speechProvider ?? 'python');
+    setSpeechModel(props.settings?.speechModel ?? 'faster-whisper-tiny');
     setAutoTranscribeOnImport(props.settings?.autoTranscribeOnImport ?? true);
   }, [props.settings]);
 
@@ -471,7 +499,17 @@ function SettingsPane(props: {
           </select>
         </Field>
         <Field label="Speech-to-Text Model">
-          <Input value={speechModel} onChange={(event) => setSpeechModel(event.target.value)} />
+          <select
+            className="h-9 w-full rounded border border-input bg-background px-2 text-sm"
+            value={speechModel}
+            onChange={(event) => setSpeechModel(event.target.value)}
+          >
+            <option value="faster-whisper-tiny">tiny · fastest</option>
+            <option value="faster-whisper-base">base · light</option>
+            <option value="faster-whisper-small">small · more accurate</option>
+            <option value="faster-whisper-medium">medium · slower</option>
+          </select>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">首次使用某个模型会下载/加载模型文件；短音频建议先用 tiny。</p>
         </Field>
         <label className="flex items-center gap-3 text-sm">
           <input

@@ -8,7 +8,7 @@ const defaults: AppSettings = {
   deepSeekModel: 'deepseek-chat',
   watchFolder: '',
   speechProvider: defaultSpeechProvider(),
-  speechModel: 'faster-whisper-small',
+  speechModel: 'faster-whisper-tiny',
   autoTranscribeOnImport: true,
   mockSpeechProviderEnabled: isMockSpeechToTextAllowed()
 };

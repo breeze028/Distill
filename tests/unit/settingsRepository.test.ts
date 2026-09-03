@@ -32,6 +32,7 @@ describe('SettingsRepository', () => {
     const settings = repository.getSettings();
 
     expect(settings.speechProvider).toBe('python');
+    expect(settings.speechModel).toBe('faster-whisper-tiny');
     expect(settings.mockSpeechProviderEnabled).toBe(false);
   });
 

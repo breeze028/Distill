@@ -44,7 +44,7 @@ pnpm smoke:stt
 - `DISTILL_PYTHON_COMMAND`：显式指定 Python 可执行文件；不设置时会优先发现 `python\.venv\Scripts\python.exe`。
 - `DISTILL_ALLOW_MOCK_STT`：设为 `true` 时允许 UI/测试使用 mock STT。
 - `DISTILL_STT_PROVIDER`：首次启动时的默认 provider，可设为 `python`；设为 `mock` 时也会开放 mock STT。
-- `DISTILL_WHISPER_MODEL`：默认 `small`，也接受 UI 设置中的 `faster-whisper-small` 形式。
+- `DISTILL_WHISPER_MODEL`：默认 `tiny`，也接受 UI 设置中的 `faster-whisper-tiny` 形式。
 - `DISTILL_WHISPER_DEVICE`：默认 `auto`。
 - `DISTILL_WHISPER_COMPUTE_TYPE`：默认 `int8`。
 
