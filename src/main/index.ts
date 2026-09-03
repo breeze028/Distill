@@ -14,7 +14,7 @@ import { logger } from '@main/logging/logger';
 import { MockSpeechToTextService } from '@main/stt/mockSpeechToTextService';
 import { PythonSpeechToTextService } from '@main/stt/pythonSpeechToTextService';
 import { SelectableSpeechToTextService } from '@main/stt/selectableSpeechToTextService';
-import { resolveAudioRange } from '@main/audio/audioRange';
+import { createAudioRangeResponse, resolveAudioRange } from '@main/audio/audioRange';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -30,6 +30,7 @@ protocol.registerSchemesAsPrivileged([
   {
     scheme: 'distill-audio',
     privileges: {
+      standard: true,
       secure: true,
       stream: true,
       supportFetchAPI: true
@@ -113,6 +114,10 @@ function registerAudioProtocol(): void {
 
     const fileSize = fs.statSync(recording.filePath).size;
     const range = resolveAudioRange(request.headers.get('range'), fileSize);
+    if (range.status === 206) {
+      return createAudioRangeResponse(recording.filePath, range, request.method);
+    }
+
     if (range.status === 416) {
       return new Response(null, {
         status: 416,
@@ -123,8 +128,6 @@ function registerAudioProtocol(): void {
       });
     }
 
-    return net.fetch(pathToFileURL(recording.filePath).toString(), {
-      headers: range.status === 206 ? { Range: `bytes=${range.start}-${range.end}` } : undefined
-    });
+    return net.fetch(pathToFileURL(recording.filePath).toString());
   });
 }

@@ -52,4 +52,4 @@ Renderer 是 React UI，使用 Zustand 管理应用状态。Renderer 只能调�
 
 Renderer 使用 `distill-audio://recording/{id}`。Main 根据 recording ID 查找文件路径，并以安全协议流式返回音频文件。该协议支持 `Range` 请求，seek 时会返回 `206 Partial Content`、`Accept-Ranges` 和 `Content-Range`，保证 M4A/MP3/WAV 可以从 transcript segment 对应时间稳定回听。
 
-Transcript segment 点击回听在 Renderer 内完成：先等待 audio metadata 可用，再把目标时间限制在音频有效时长内，等待 seek 完成后播放。Transcript 面板本身负责独立滚动，避免长音频 transcript 撑开整个详情页布局。
+Transcript segment 点击回听在 Renderer 内完成：点击后会把 audio source 重新加载为带 `#t={segment.startTime}` 的 media fragment URL，等待 metadata、seek 和可播放数据就绪后再播放。这样避免某些 M4A 在已有解码流中设置 `currentTime` 后实际播放又回到开头。Transcript 面板本身负责独立滚动，避免长音频 transcript 撑开整个详情页布局。

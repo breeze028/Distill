@@ -326,10 +326,20 @@ function RecordingDetailPane(props: {
   const [playbackRate, setPlaybackRate] = useState(1);
 
   useEffect(() => {
+    if (!audioRef.current || !props.recording) {
+      return;
+    }
+
+    audioRef.current.src = buildAudioSource(props.recording.id);
+    audioRef.current.load();
+    audioRef.current.playbackRate = playbackRate;
+  }, [props.recording?.id]);
+
+  useEffect(() => {
     if (audioRef.current) {
       audioRef.current.playbackRate = playbackRate;
     }
-  }, [playbackRate, props.recording?.id]);
+  }, [playbackRate]);
 
   if (!props.recording) {
     return (
@@ -363,7 +373,7 @@ function RecordingDetailPane(props: {
           </div>
         </div>
         <div className="mt-5 flex items-center gap-3">
-          <audio ref={audioRef} className="h-10 flex-1" src={`distill-audio://recording/${recording.id}`} controls preload="metadata" />
+          <audio ref={audioRef} className="h-10 flex-1" controls preload="metadata" />
           <select
             className="h-9 rounded border border-input bg-background px-2 text-sm"
             value={playbackRate}
@@ -419,7 +429,7 @@ function RecordingDetailPane(props: {
                   segment={segment}
                   onClick={() => {
                     if (audioRef.current) {
-                      void seekAudioToSegment(audioRef.current, segment.startTime);
+                      void seekAudioToSegment(audioRef.current, recording.id, segment.startTime);
                     }
                   }}
                 />
@@ -495,12 +505,21 @@ function TranscriptionProgressNotice(props: { job: ProcessingJob }) {
   );
 }
 
-async function seekAudioToSegment(audio: HTMLAudioElement, startTime: number): Promise<void> {
-  await waitForMediaMetadata(audio);
-  const targetTime = clampSeekTime(audio, startTime);
+async function seekAudioToSegment(audio: HTMLAudioElement, recordingId: string, startTime: number): Promise<void> {
+  const requestedTime = Math.max(0, startTime);
   audio.pause();
+  audio.src = buildAudioSource(recordingId, requestedTime);
+  audio.load();
+  await waitForMediaMetadata(audio);
+  const targetTime = clampSeekTime(audio, requestedTime);
   await setAudioCurrentTime(audio, targetTime);
+  await waitForPlayableData(audio, targetTime);
   await audio.play().catch(() => undefined);
+}
+
+function buildAudioSource(recordingId: string, startTime?: number): string {
+  const baseUrl = `distill-audio://recording/${recordingId}`;
+  return startTime === undefined ? baseUrl : `${baseUrl}#t=${startTime.toFixed(3)}`;
 }
 
 function waitForMediaMetadata(audio: HTMLAudioElement): Promise<void> {
@@ -561,15 +580,49 @@ function setAudioCurrentTime(audio: HTMLAudioElement, targetTime: number): Promi
     audio.addEventListener('timeupdate', handleTimeUpdate);
     timeout = window.setTimeout(settle, 800);
 
-    if (typeof audio.fastSeek === 'function') {
-      audio.fastSeek(targetTime);
-    } else {
-      audio.currentTime = targetTime;
-    }
+    audio.currentTime = targetTime;
 
     if (Math.abs(audio.currentTime - targetTime) <= toleranceSeconds) {
       settle();
     }
+  });
+}
+
+function waitForPlayableData(audio: HTMLAudioElement, targetTime: number): Promise<void> {
+  if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && Math.abs(audio.currentTime - targetTime) <= 0.75) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeout = 0;
+
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      audio.removeEventListener('canplay', settle);
+      audio.removeEventListener('loadeddata', settle);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+
+    const settle = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolve();
+    };
+
+    const handleTimeUpdate = () => {
+      if (Math.abs(audio.currentTime - targetTime) <= 0.75) {
+        settle();
+      }
+    };
+
+    audio.addEventListener('canplay', settle, { once: true });
+    audio.addEventListener('loadeddata', settle, { once: true });
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    timeout = window.setTimeout(settle, 1200);
   });
 }
 
