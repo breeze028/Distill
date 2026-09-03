@@ -20,6 +20,6 @@ export class SelectableSpeechToTextService implements SpeechToTextService {
   }
 
   private currentProvider(): SpeechToTextService {
-    return this.providers[this.settings.getSettings().speechProvider] ?? this.providers.mock;
+    return this.providers[this.settings.getSettings().speechProvider] ?? this.providers.python;
   }
 }

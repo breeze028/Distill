@@ -1,5 +1,5 @@
 import type { SqliteDatabase } from '@main/database/database';
-import type { AppSettings } from '@shared/types/domain';
+import type { AppSettings, SpeechToTextProvider } from '@shared/types/domain';
 import type { SaveSettingsRequest } from '@shared/schemas/ipc';
 
 const defaults: AppSettings = {
@@ -7,9 +7,10 @@ const defaults: AppSettings = {
   deepSeekApiKeyConfigured: Boolean(process.env.DEEPSEEK_API_KEY),
   deepSeekModel: 'deepseek-chat',
   watchFolder: '',
-  speechProvider: process.env.DISTILL_STT_PROVIDER === 'python' ? 'python' : 'mock',
+  speechProvider: defaultSpeechProvider(),
   speechModel: 'faster-whisper-small',
-  autoTranscribeOnImport: true
+  autoTranscribeOnImport: true,
+  mockSpeechProviderEnabled: isMockSpeechToTextAllowed()
 };
 
 export class SettingsRepository {
@@ -24,9 +25,10 @@ export class SettingsRepository {
       deepSeekApiKeyConfigured: Boolean(values.deepSeekApiKey) || defaults.deepSeekApiKeyConfigured,
       deepSeekModel: values.deepSeekModel ?? defaults.deepSeekModel,
       watchFolder: values.watchFolder ?? defaults.watchFolder,
-      speechProvider: values.speechProvider === 'python' ? 'python' : values.speechProvider === 'mock' ? 'mock' : defaults.speechProvider,
+      speechProvider: normalizeSpeechProvider(values.speechProvider),
       speechModel: values.speechModel ?? defaults.speechModel,
-      autoTranscribeOnImport: values.autoTranscribeOnImport === undefined ? defaults.autoTranscribeOnImport : values.autoTranscribeOnImport === 'true'
+      autoTranscribeOnImport: values.autoTranscribeOnImport === undefined ? defaults.autoTranscribeOnImport : values.autoTranscribeOnImport === 'true',
+      mockSpeechProviderEnabled: isMockSpeechToTextAllowed()
     };
   }
 
@@ -54,4 +56,22 @@ export class SettingsRepository {
     const row = this.db.prepare('SELECT value FROM app_setting WHERE key = ?').get(key) as { value: string } | undefined;
     return row?.value || process.env.DEEPSEEK_API_KEY || '';
   }
+}
+
+function defaultSpeechProvider(): SpeechToTextProvider {
+  return process.env.DISTILL_STT_PROVIDER === 'mock' && isMockSpeechToTextAllowed() ? 'mock' : 'python';
+}
+
+function normalizeSpeechProvider(value: string | undefined): SpeechToTextProvider {
+  if (value === 'mock' && isMockSpeechToTextAllowed()) {
+    return 'mock';
+  }
+  if (value === 'mock') {
+    return 'python';
+  }
+  return value === 'python' ? 'python' : defaults.speechProvider;
+}
+
+function isMockSpeechToTextAllowed(): boolean {
+  return process.env.DISTILL_ALLOW_MOCK_STT === 'true' || process.env.DISTILL_STT_PROVIDER === 'mock';
 }

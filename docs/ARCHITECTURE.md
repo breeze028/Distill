@@ -38,6 +38,8 @@ Renderer 是 React UI，使用 Zustand 管理应用状态。Renderer 只能调�
 
 数据库 migration 位于 `src/main/database/migrations`。
 
+`transcript` 永久保存原始转写文本，并记录 `provider`、`model` 和 `source_job_id`。AI 生成内容必须写入 `ai_artifact`，不能覆盖 transcript 原文。
+
 ## 搜索
 
 搜索使用 SQLite FTS5。第一版索引字段包括标题、转写文本、AI 内容和标签。

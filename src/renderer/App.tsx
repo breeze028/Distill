@@ -352,7 +352,8 @@ function RecordingDetailPane(props: {
         <section className="min-w-0 overflow-y-auto px-8 py-6">
           <SectionTitle title="Transcript" />
           {recording.transcript?.segments.length ? (
-            <div className="space-y-1">
+            <div className="space-y-3">
+              {isMockTranscript(recording) ? <MockTranscriptNotice /> : null}
               {recording.transcript.segments.map((segment) => (
                 <TranscriptRow
                   key={segment.id}
@@ -382,6 +383,18 @@ function RecordingDetailPane(props: {
   );
 }
 
+function MockTranscriptNotice() {
+  return (
+    <div className="flex items-start gap-2 rounded border border-destructive/25 bg-destructive/10 px-3 py-3 text-sm text-destructive">
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div>
+        <div className="font-medium">这不是这段录音的真实转写</div>
+        <p className="mt-1 leading-6 text-destructive/80">当前显示的是 mock/占位 transcript。请确认 Settings 使用 Python Worker，然后点击 Retranscribe 生成真实内容。</p>
+      </div>
+    </div>
+  );
+}
+
 function JobErrorNotice(props: { job: ProcessingJob; disabled: boolean; onRetry(): void }) {
   return (
     <div className="mt-4 flex items-start justify-between gap-4 rounded border border-destructive/25 bg-destructive/10 px-3 py-3 text-sm text-destructive">
@@ -401,6 +414,10 @@ function JobErrorNotice(props: { job: ProcessingJob; disabled: boolean; onRetry(
 
 function getLatestTranscriptionJob(recording: RecordingDetail): ProcessingJob | null {
   return recording.jobs.find((job) => job.kind === 'transcription') ?? null;
+}
+
+function isMockTranscript(recording: RecordingDetail): boolean {
+  return recording.transcript?.provider === 'mock' || recording.transcript?.fullText.includes('这是第一阶段的模拟转写') === true;
 }
 
 function TranscriptRow(props: { segment: TranscriptSegment; onClick(): void }) {
@@ -449,7 +466,7 @@ function SettingsPane(props: {
             value={speechProvider}
             onChange={(event) => setSpeechProvider(event.target.value as 'mock' | 'python')}
           >
-            <option value="mock">Mock STT</option>
+            {props.settings?.mockSpeechProviderEnabled ? <option value="mock">Mock STT</option> : null}
             <option value="python">Python Worker</option>
           </select>
         </Field>

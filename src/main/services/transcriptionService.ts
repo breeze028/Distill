@@ -54,6 +54,7 @@ export class TranscriptionService {
   private async runTranscriptionJob(recording: RecordingDetail, jobId: string): Promise<RecordingDetail> {
     const recordingId = recording.id;
     try {
+      const status = await this.speechToText.getStatus();
       const result = await this.speechToText.transcribe(recording.filePath);
       const segments = result.segments.map((segment) => ({
         id: 'generated-by-repository',
@@ -70,6 +71,9 @@ export class TranscriptionService {
       this.recordings.addTranscript(recordingId, {
         language: result.language,
         duration: result.duration ?? recording.duration,
+        provider: status.provider,
+        model: status.modelName,
+        sourceJobId: jobId,
         fullText: segments.map((segment) => segment.text).join('\n'),
         segments
       });

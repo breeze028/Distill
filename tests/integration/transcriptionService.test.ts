@@ -34,6 +34,9 @@ describe('TranscriptionService', () => {
 
     expect(detail.processingState).toBe('succeeded');
     expect(detail.transcript?.fullText).toContain('第一句中文转写');
+    expect(detail.transcript?.provider).toBe('mock');
+    expect(detail.transcript?.model).toBe('mock');
+    expect(detail.transcript?.sourceJobId).toBe(detail.jobs.find((job) => job.kind === 'transcription')?.id);
     expect(detail.transcript?.segments).toHaveLength(2);
     expect(detail.jobs.find((job) => job.kind === 'transcription')?.state).toBe('succeeded');
     expect(repository.search('第二句').map((item) => item.id)).toContain(imported.recording.id);

@@ -50,7 +50,7 @@ export class PythonSpeechToTextService implements SpeechToTextService {
   private readonly diagnosisTimeoutMs: number;
 
   constructor(options: PythonSpeechToTextOptions = {}) {
-    this.pythonCommand = options.pythonCommand ?? process.env.DISTILL_PYTHON_COMMAND ?? 'python';
+    this.pythonCommand = options.pythonCommand ?? resolveDefaultPythonCommand();
     this.workerPath = options.workerPath ?? resolveDefaultWorkerPath();
     this.modelName = options.modelName ?? process.env.DISTILL_WHISPER_MODEL ?? 'small';
     this.device = options.device ?? process.env.DISTILL_WHISPER_DEVICE ?? 'auto';
@@ -187,6 +187,19 @@ function resolveDefaultWorkerPath(): string {
   }
 
   return path.join(process.cwd(), 'python', 'worker', 'worker.py');
+}
+
+function resolveDefaultPythonCommand(): string {
+  if (process.env.DISTILL_PYTHON_COMMAND) {
+    return process.env.DISTILL_PYTHON_COMMAND;
+  }
+
+  const sourceTreeVenv = path.join(process.cwd(), 'python', '.venv', 'Scripts', 'python.exe');
+  if (fs.existsSync(sourceTreeVenv)) {
+    return sourceTreeVenv;
+  }
+
+  return 'python';
 }
 
 function normalizeModelName(modelName: string): string {

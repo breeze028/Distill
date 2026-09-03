@@ -6,12 +6,21 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PythonSpeechToTextService } from '@main/stt/pythonSpeechToTextService';
 
 let tmpDir = '';
+const originalCwd = process.cwd();
+const originalPythonCommand = process.env.DISTILL_PYTHON_COMMAND;
 
 beforeEach(() => {
+  delete process.env.DISTILL_PYTHON_COMMAND;
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'distill-python-stt-'));
 });
 
 afterEach(() => {
+  process.chdir(originalCwd);
+  if (originalPythonCommand === undefined) {
+    delete process.env.DISTILL_PYTHON_COMMAND;
+  } else {
+    process.env.DISTILL_PYTHON_COMMAND = originalPythonCommand;
+  }
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
@@ -103,6 +112,22 @@ describe('PythonSpeechToTextService', () => {
 
     expect(status.ready).toBe(false);
     expect(status.errorMessage).toContain('was not found');
+  });
+
+  it('uses the source-tree Python virtual environment when no command is configured', async () => {
+    const venvScripts = path.join(tmpDir, 'python', '.venv', 'Scripts');
+    const venvPython = path.join(venvScripts, 'python.exe');
+    fs.mkdirSync(venvScripts, { recursive: true });
+    fs.writeFileSync(venvPython, '');
+    process.chdir(tmpDir);
+
+    const service = new PythonSpeechToTextService({
+      workerPath: path.join(tmpDir, 'missing-worker.py')
+    });
+
+    const status = await service.getStatus();
+
+    expect(status.pythonCommand).toBe(venvPython);
   });
 });
 

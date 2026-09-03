@@ -7,7 +7,7 @@ async function main() {
   const root = path.resolve(__dirname, '..', '..');
   const exe = path.join(root, 'out', 'distill-win32-x64', 'distill.exe');
   const db = path.join(root, 'test-results', 'real-stt-ui.db');
-  const audio = path.join(root, 'test-fixtures', 'real-stt-chinese.m4a');
+  const audio = path.join(root, 'test-fixtures', '真实中文转写.m4a');
   const python = process.env.DISTILL_PYTHON_COMMAND || path.join(root, 'python', '.venv', 'Scripts', 'python.exe');
 
   if (!fs.existsSync(exe)) {

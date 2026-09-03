@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { SqliteDatabase } from '@main/database/database';
-import type { AIArtifact, AIArtifactContent, ProcessingJob, ProcessingJobKind, ProcessingState, RecordingDetail, RecordingListItem, Transcript } from '@shared/types/domain';
+import type { AIArtifact, AIArtifactContent, ProcessingJob, ProcessingJobKind, ProcessingState, RecordingDetail, RecordingListItem, SpeechToTextProvider, Transcript } from '@shared/types/domain';
 import { aiArtifactContentSchema } from '@shared/schemas/ai';
 
 type RecordingRow = {
@@ -21,6 +21,9 @@ type TranscriptRow = {
   recording_id: string;
   language: string | null;
   duration: number | null;
+  provider: string | null;
+  model: string | null;
+  source_job_id: string | null;
   full_text: string;
   created_at: string;
 };
@@ -68,6 +71,9 @@ export type NewRecording = {
   duration: number | null;
   createdAt: string | null;
 };
+
+type NewTranscript = Omit<Transcript, 'id' | 'recordingId' | 'createdAt' | 'provider' | 'model' | 'sourceJobId'> &
+  Partial<Pick<Transcript, 'provider' | 'model' | 'sourceJobId'>>;
 
 export class RecordingRepository {
   constructor(private readonly db: SqliteDatabase) {}
@@ -185,14 +191,28 @@ export class RecordingRepository {
     return [...rowsById.values()].map((row) => this.toListItem(row));
   }
 
-  addTranscript(recordingId: string, transcript: Omit<Transcript, 'id' | 'recordingId' | 'createdAt'>): Transcript {
+  addTranscript(recordingId: string, transcript: NewTranscript): Transcript {
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
 
     const write = this.db.transaction(() => {
       this.db
-        .prepare('INSERT INTO transcript (id, recording_id, language, duration, full_text, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(id, recordingId, transcript.language, transcript.duration, transcript.fullText, createdAt);
+        .prepare(
+          `INSERT INTO transcript (
+            id, recording_id, language, duration, provider, model, source_job_id, full_text, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          id,
+          recordingId,
+          transcript.language,
+          transcript.duration,
+          transcript.provider ?? null,
+          transcript.model ?? null,
+          transcript.sourceJobId ?? null,
+          transcript.fullText,
+          createdAt
+        );
 
       const insertSegment = this.db.prepare(
         'INSERT INTO transcript_segment (id, transcript_id, start_time, end_time, text) VALUES (?, ?, ?, ?, ?)'
@@ -375,6 +395,9 @@ export class RecordingRepository {
       recordingId: row.recording_id,
       language: row.language,
       duration: row.duration,
+      provider: toSpeechToTextProvider(row.provider),
+      model: row.model,
+      sourceJobId: row.source_job_id,
       fullText: row.full_text,
       createdAt: row.created_at,
       segments: segments.map((segment) => ({
@@ -487,4 +510,8 @@ function toProcessingJob(row: ProcessingJobRow): ProcessingJob {
     startedAt: row.started_at,
     finishedAt: row.finished_at
   };
+}
+
+function toSpeechToTextProvider(value: string | null): SpeechToTextProvider | null {
+  return value === 'mock' || value === 'python' ? value : null;
 }

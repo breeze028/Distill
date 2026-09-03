@@ -147,7 +147,9 @@ function launchApp(exe, db) {
     executablePath: exe,
     env: {
       ...process.env,
-      DISTILL_DB_PATH: db
+      DISTILL_DB_PATH: db,
+      DISTILL_STT_PROVIDER: 'mock',
+      DISTILL_ALLOW_MOCK_STT: 'true'
     }
   });
 }

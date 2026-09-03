@@ -1,6 +1,6 @@
 # 长期计划
 
-最后更新：2026-09-02
+最后更新：2026-09-03
 
 本文档记录 Distill 的长期开发路线。它不是承诺所有功能一次完成，而是帮助后续 AI 开发始终知道项目下一步应该往哪里走。
 
@@ -42,11 +42,13 @@
 - UI 显示 Transcribing、Failed、Retry 等状态
 - 点击 Transcript Segment 后音频 seek 到 segment start time
 - 保留 mock STT 测试，不让自动化测试依赖真实 Whisper 模型
+- 真实用户导入默认走 Python Worker，mock STT 只用于显式测试/开发
 
 验收重点：
 
 - 导入真实 `.m4a` 后能生成中文 transcript
 - segment 的 start/end/text 正确入库
+- transcript 能记录 provider、model 和 source job，避免 mock 占位内容伪装成真实转写
 - 重新打开应用后 transcript 仍存在
 - 点击一句 transcript 可以跳转播放
 - Whisper worker 启动失败、模型缺失、转写失败时有用户可理解的错误
@@ -62,6 +64,8 @@
 - 已增加 Settings 中的 STT 环境状态检查入口。
 - 已增加 Settings 中的 STT provider 选择；mock 与 Python Worker 可在应用内切换。
 - 已验证打包应用可通过 Python Worker 生成中文真实 transcript。
+- 已将正常默认 provider 调整为 Python Worker，并把 mock STT 限制为显式环境变量开启。
+- 已给 transcript 增加来源元数据，并在 UI 中提示旧 mock/占位 transcript 需要重新转写。
 
 ## Phase 2：AI Template 与 DeepSeek 结构化笔记
 

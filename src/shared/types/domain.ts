@@ -28,6 +28,9 @@ export type Transcript = {
   recordingId: string;
   language: string | null;
   duration: number | null;
+  provider: SpeechToTextProvider | null;
+  model: string | null;
+  sourceJobId: string | null;
   fullText: string;
   createdAt: string;
   segments: TranscriptSegment[];
@@ -84,6 +87,7 @@ export type AppSettings = {
   speechProvider: SpeechToTextProvider;
   speechModel: string;
   autoTranscribeOnImport: boolean;
+  mockSpeechProviderEnabled: boolean;
 };
 
 export type SpeechToTextProvider = 'mock' | 'python';

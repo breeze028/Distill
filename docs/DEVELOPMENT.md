@@ -13,17 +13,24 @@ pnpm build
 
 ## 本地转写环境
 
-默认开发模式使用 mock STT，便于不下载模型也能跑通 UI、数据库和测试。
+默认开发模式使用 Python Worker。为了避免真实用户录音被占位文字污染，mock STT 只在显式环境变量开启时可见。
 
 启用真实 faster-whisper：
 
 ```powershell
 pnpm setup:stt
-$env:DISTILL_PYTHON_COMMAND = ".\python\.venv\Scripts\python.exe"
 pnpm dev
 ```
 
-然后在 Settings 中把 `Speech-to-Text Provider` 改为 `Python Worker`。
+如果未设置 `DISTILL_PYTHON_COMMAND`，应用会优先使用源码目录下的 `python\.venv\Scripts\python.exe`。
+
+启用 mock STT 做 UI/数据库流程测试：
+
+```powershell
+$env:DISTILL_ALLOW_MOCK_STT = "true"
+$env:DISTILL_STT_PROVIDER = "mock"
+pnpm dev
+```
 
 验证打包应用里的真实 STT 链路：
 
@@ -34,7 +41,9 @@ pnpm smoke:stt
 
 可选环境变量：
 
-- `DISTILL_STT_PROVIDER`：首次启动时的默认 provider，可设为 `python`。
+- `DISTILL_PYTHON_COMMAND`：显式指定 Python 可执行文件；不设置时会优先发现 `python\.venv\Scripts\python.exe`。
+- `DISTILL_ALLOW_MOCK_STT`：设为 `true` 时允许 UI/测试使用 mock STT。
+- `DISTILL_STT_PROVIDER`：首次启动时的默认 provider，可设为 `python`；设为 `mock` 时也会开放 mock STT。
 - `DISTILL_WHISPER_MODEL`：默认 `small`，也接受 UI 设置中的 `faster-whisper-small` 形式。
 - `DISTILL_WHISPER_DEVICE`：默认 `auto`。
 - `DISTILL_WHISPER_COMPUTE_TYPE`：默认 `int8`。
