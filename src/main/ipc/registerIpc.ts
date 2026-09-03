@@ -8,6 +8,7 @@ import type { AIArtifactService } from '@main/services/aiArtifactService';
 import type { RecordingRepository } from '@main/repositories/recordingRepository';
 import type { SettingsRepository } from '@main/settings/settingsRepository';
 import type { SpeechToTextService } from '@main/stt/types';
+import { listBuiltInTemplateMetadata } from '@main/llm/templates';
 
 export function registerIpcHandlers(dependencies: {
   recordings: RecordingRepository;
@@ -60,6 +61,8 @@ export function registerIpcHandlers(dependencies: {
     const parsed = generateAIArtifactRequestSchema.parse(input);
     return dependencies.aiArtifacts.startGeneration(parsed.recordingId, parsed.templateId);
   });
+
+  ipcMain.handle(ipcChannels.aiTemplatesList, () => listBuiltInTemplateMetadata());
 
   ipcMain.handle(ipcChannels.recordingsSearch, (_event, query: string) => dependencies.recordings.search(query));
 

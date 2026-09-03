@@ -56,6 +56,13 @@ export type AIArtifact = {
   createdAt: string;
 };
 
+export type AIArtifactTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  promptVersion: string;
+};
+
 export type ProcessingJob = {
   id: string;
   recordingId: string;

@@ -1,4 +1,5 @@
 import { aiArtifactContentSchema } from '@shared/schemas/ai';
+import type { AIArtifactTemplate } from '@shared/types/domain';
 
 const outputSchema = JSON.stringify(aiArtifactContentSchema.toJSONSchema(), null, 2);
 
@@ -43,3 +44,12 @@ export const builtInTemplates = [
     ].join('\n')
   }
 ] as const;
+
+export function listBuiltInTemplateMetadata(): AIArtifactTemplate[] {
+  return builtInTemplates.map((template) => ({
+    id: template.id,
+    name: template.name,
+    description: template.description,
+    promptVersion: template.promptVersion
+  }));
+}

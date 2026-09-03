@@ -1,4 +1,4 @@
-import type { AppSettings, ImportRecordingResult, RecordingDetail, RecordingListItem, SpeechToTextStatus } from './types/domain';
+import type { AIArtifactTemplate, AppSettings, ImportRecordingResult, RecordingDetail, RecordingListItem, SpeechToTextStatus } from './types/domain';
 import type { SaveSettingsRequest } from './schemas/ipc';
 
 export const ipcChannels = {
@@ -9,6 +9,7 @@ export const ipcChannels = {
   recordingsStartTranscription: 'recordings:start-transcription',
   recordingsTranscribe: 'recordings:transcribe',
   recordingsStartAIGeneration: 'recordings:start-ai-generation',
+  aiTemplatesList: 'ai-templates:list',
   recordingsSearch: 'recordings:search',
   settingsGet: 'settings:get',
   settingsSave: 'settings:save',
@@ -24,6 +25,7 @@ export type DistillApi = {
   startTranscription(id: string): Promise<RecordingDetail>;
   transcribeRecording(id: string): Promise<RecordingDetail>;
   startAIGeneration(recordingId: string, templateId?: string): Promise<RecordingDetail>;
+  listAITemplates(): Promise<AIArtifactTemplate[]>;
   searchRecordings(query: string): Promise<RecordingListItem[]>;
   getSettings(): Promise<AppSettings>;
   saveSettings(settings: SaveSettingsRequest): Promise<AppSettings>;

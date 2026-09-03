@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import type { AppSettings, ProcessingJobKind, RecordingDetail, RecordingListItem, SpeechToTextStatus } from '@shared/types/domain';
+import type { AIArtifactTemplate, AppSettings, ProcessingJobKind, RecordingDetail, RecordingListItem, SpeechToTextStatus } from '@shared/types/domain';
 
 type ViewMode = 'library' | 'inbox' | 'settings';
 
 type LibraryState = {
   recordings: RecordingListItem[];
   selectedRecording: RecordingDetail | null;
+  aiTemplates: AIArtifactTemplate[];
   settings: AppSettings | null;
   speechToTextStatus: SpeechToTextStatus | null;
   query: string;
@@ -35,6 +36,7 @@ type LibraryState = {
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   recordings: [],
   selectedRecording: null,
+  aiTemplates: [],
   settings: null,
   speechToTextStatus: null,
   query: '',
@@ -49,14 +51,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   async load() {
     set({ loading: true, error: null });
     try {
-      const [recordings, settings, speechToTextStatus] = await Promise.all([
+      const [recordings, aiTemplates, settings, speechToTextStatus] = await Promise.all([
         window.distillAPI.listRecordings(),
+        window.distillAPI.listAITemplates(),
         window.distillAPI.getSettings(),
         window.distillAPI.getSpeechToTextStatus()
       ]);
       const selected = get().selectedRecording;
       set({
         recordings,
+        aiTemplates,
         settings,
         speechToTextStatus,
         selectedRecording: selected && recordings.some((item) => item.id === selected.id) ? selected : null,

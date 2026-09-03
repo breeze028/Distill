@@ -87,6 +87,7 @@ async function main() {
     });
     const detailBeforeGenerate = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
     const previousAIJobId = detailBeforeGenerate.jobs.find((job) => job.kind === 'ai')?.id;
+    await win.getByTestId('ai-template-select').selectOption('technical-thinking');
     await win.getByRole('button', { name: 'Generate Notes' }).click();
     await win.getByText(/Generating Notes · 00:0[0-3]/).waitFor();
     aiGenerationProgressVisible = true;
@@ -96,7 +97,7 @@ async function main() {
     if (runningAIJob) {
       await waitForProcessingJob(win, imported.recording.id, runningAIJob.id, 30000);
     }
-    await win.getByText('整理自 default-summary 模板的模拟 AI 笔记。').waitFor();
+    await win.getByText('整理自 technical-thinking 模板的模拟 AI 笔记。').waitFor();
 
     const detailBeforeRetranscribe = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
     const previousJobId = detailBeforeRetranscribe.jobs.find((job) => job.kind === 'transcription')?.id;
@@ -171,7 +172,7 @@ async function main() {
         hasDetailText: text.includes('phase1-transcript-long-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
         autoTranscribedAfterImport: Boolean(imported.recording.jobs.find((job) => job.kind === 'transcription')),
-        hasGeneratedAIArtifact: text.includes('整理自 default-summary 模板的模拟 AI 笔记。'),
+        hasGeneratedAIArtifact: text.includes('整理自 technical-thinking 模板的模拟 AI 笔记。'),
         hasTranscriptText: text.includes('这是第一阶段的模拟转写'),
         hasPersistedTranscriptAfterReopen: reopenedText.includes('这是第一阶段的模拟转写')
       },
@@ -237,7 +238,7 @@ async function main() {
   if (!imported.recording.jobs.some((job) => job.kind === 'transcription')) {
     throw new Error('Expected import to start a transcription job automatically.');
   }
-  if (!text.includes('整理自 default-summary 模板的模拟 AI 笔记。')) {
+  if (!text.includes('整理自 technical-thinking 模板的模拟 AI 笔记。')) {
     throw new Error('Generated AI artifact summary was not visible.');
   }
   if (!text.includes('这是第一阶段的模拟转写')) {

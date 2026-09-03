@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock3, FileAudio, FolderOpen, Import, Library, RefreshCw, Search, Settings, Upload, XCircle } from 'lucide-react';
-import type { ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment } from '@shared/types/domain';
+import type { AIArtifactTemplate, ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { cn } from '@renderer/lib/utils';
@@ -10,6 +10,7 @@ export function App() {
   const {
     recordings,
     selectedRecording,
+    aiTemplates,
     settings,
     speechToTextStatus,
     query,
@@ -123,12 +124,13 @@ export function App() {
         ) : (
           <RecordingDetailPane
             recording={selectedRecording}
+            aiTemplates={aiTemplates}
             importing={importing}
             isTranscribing={selectedRecording ? Boolean(transcribingIds[selectedRecording.id]) : false}
             isGeneratingArtifact={selectedRecording ? Boolean(generatingArtifactIds[selectedRecording.id]) : false}
             onImport={() => void importFromDialog()}
             onTranscribe={(id) => void transcribeRecording(id)}
-            onGenerateArtifact={(id) => void generateArtifact(id)}
+            onGenerateArtifact={(id, templateId) => void generateArtifact(id, templateId)}
           />
         )}
       </main>
@@ -321,15 +323,17 @@ function RecordingRow(props: { recording: RecordingListItem; selected: boolean; 
 
 function RecordingDetailPane(props: {
   recording: RecordingDetail | null;
+  aiTemplates: AIArtifactTemplate[];
   importing: boolean;
   isTranscribing: boolean;
   isGeneratingArtifact: boolean;
   onImport(): void;
   onTranscribe(id: string): void;
-  onGenerateArtifact(id: string): void;
+  onGenerateArtifact(id: string, templateId: string): void;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('default-summary');
 
   useEffect(() => {
     if (!audioRef.current || !props.recording) {
@@ -346,6 +350,13 @@ function RecordingDetailPane(props: {
       audioRef.current.playbackRate = playbackRate;
     }
   }, [playbackRate]);
+
+  useEffect(() => {
+    const preferredTemplate = props.recording?.latestArtifact?.templateId ?? 'default-summary';
+    if (props.aiTemplates.some((template) => template.id === preferredTemplate)) {
+      setSelectedTemplateId(preferredTemplate);
+    }
+  }, [props.recording?.id, props.recording?.latestArtifact?.templateId, props.aiTemplates]);
 
   if (!props.recording) {
     return (
@@ -368,6 +379,8 @@ function RecordingDetailPane(props: {
   const aiError = aiJob?.state === 'failed' ? aiJob : null;
   const isGeneratingArtifact = props.isGeneratingArtifact || aiJob?.state === 'running';
   const canGenerateArtifact = Boolean(recording.transcript) && !isTranscribing;
+  const selectedTemplate = props.aiTemplates.find((template) => template.id === selectedTemplateId) ?? props.aiTemplates[0] ?? null;
+  const effectiveTemplateId = selectedTemplate?.id ?? 'default-summary';
 
   return (
     <article className="flex h-full min-h-0 min-w-0 flex-col">
@@ -419,19 +432,37 @@ function RecordingDetailPane(props: {
           <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
             <SectionTitle title="Summary" />
             {canGenerateArtifact ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => props.onGenerateArtifact(recording.id)}
-                disabled={isGeneratingArtifact}
-                title={recording.latestArtifact ? 'Regenerate AI notes' : 'Generate AI notes'}
-              >
-                {isGeneratingArtifact ? 'Generating...' : recording.latestArtifact ? 'Regenerate Notes' : 'Generate Notes'}
-              </Button>
+              <div className="flex min-w-0 items-center gap-2">
+                <select
+                  data-testid="ai-template-select"
+                  className="h-8 max-w-[180px] rounded border border-input bg-background px-2 text-xs"
+                  value={effectiveTemplateId}
+                  onChange={(event) => setSelectedTemplateId(event.target.value)}
+                  disabled={isGeneratingArtifact || props.aiTemplates.length === 0}
+                  title={selectedTemplate?.description ?? 'AI note template'}
+                >
+                  {props.aiTemplates.length ? (
+                    props.aiTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>{template.name}</option>
+                    ))
+                  ) : (
+                    <option value="default-summary">Default Summary</option>
+                  )}
+                </select>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => props.onGenerateArtifact(recording.id, effectiveTemplateId)}
+                  disabled={isGeneratingArtifact || !selectedTemplate}
+                  title={recording.latestArtifact ? 'Regenerate AI notes' : 'Generate AI notes'}
+                >
+                  {isGeneratingArtifact ? 'Generating...' : recording.latestArtifact ? 'Regenerate Notes' : 'Generate Notes'}
+                </Button>
+              </div>
             ) : null}
           </div>
           {aiError ? (
-            <JobErrorNotice job={aiError} disabled={isGeneratingArtifact || !canGenerateArtifact} onRetry={() => props.onGenerateArtifact(recording.id)} />
+            <JobErrorNotice job={aiError} disabled={isGeneratingArtifact || !canGenerateArtifact} onRetry={() => props.onGenerateArtifact(recording.id, effectiveTemplateId)} />
           ) : isGeneratingArtifact && aiJob ? (
             <AIProgressNotice job={aiJob} />
           ) : null}
@@ -494,13 +525,24 @@ function MockTranscriptNotice() {
 }
 
 function JobErrorNotice(props: { job: ProcessingJob; disabled: boolean; onRetry(): void }) {
+  const title = props.job.kind === 'ai' ? 'AI notes failed' : props.job.kind === 'transcription' ? 'Transcription failed' : 'Processing failed';
+  const defaultMessage = props.job.kind === 'ai' ? 'AI 笔记生成失败。' : 'The speech-to-text worker failed.';
+
   return (
     <div className="mt-4 flex items-start justify-between gap-4 rounded border border-destructive/25 bg-destructive/10 px-3 py-3 text-sm text-destructive">
       <div className="flex min-w-0 gap-2">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
         <div className="min-w-0">
-          <div className="font-medium">Transcription failed</div>
-          <div className="mt-1 break-words text-destructive/80">{props.job.errorMessage ?? 'The speech-to-text worker failed.'}</div>
+          <div className="font-medium">{title}</div>
+          <div className="mt-1 break-words text-destructive/80">{props.job.errorMessage ?? defaultMessage}</div>
+          {props.job.errorDetail ? (
+            <details className="mt-2 max-w-full text-xs text-destructive/80">
+              <summary className="cursor-pointer select-none font-medium text-destructive">诊断详情</summary>
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-destructive/20 bg-background/75 p-2 font-mono text-[11px] leading-5 text-foreground">
+                {props.job.errorDetail}
+              </pre>
+            </details>
+          ) : null}
         </div>
       </div>
       <Button variant="secondary" size="sm" onClick={props.onRetry} disabled={props.disabled}>
