@@ -53,6 +53,7 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - 新增 `pnpm setup:stt`，用于创建本地 Python venv 并安装 faster-whisper 依赖。
 - 新增 `pnpm smoke:stt`，用于可选验证打包应用里的真实 Python Worker 转写链路。
 - 应用启动时会恢复遗留的 running `ProcessingJob`，避免转写任务在异常关闭后永久停留在 running。
+- Python Worker 在 Windows 管道输出中强制使用 UTF-8，避免中文真实 transcript 乱码。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -101,7 +102,7 @@ pnpm dev
 - transcript segment 文本可见
 - 重开打包应用后 transcript 仍然可见
 - 点击 transcript segment 会 seek 到对应音频时间点
-- packaged app 使用 Python Worker + faster-whisper tiny 生成真实 transcript
+- packaged app 使用 Python Worker + faster-whisper tiny 生成中文真实 transcript
 - audio element 加载到有效时长
 - Electron application menu 已移除
 - Inbox 和 Settings 可打开/收回

@@ -61,6 +61,7 @@
 - 已将 Python Worker 改为真实 faster-whisper 调用，并补充 worker 进程协议校验。
 - 已增加 Settings 中的 STT 环境状态检查入口。
 - 已增加 Settings 中的 STT provider 选择；mock 与 Python Worker 可在应用内切换。
+- 已验证打包应用可通过 Python Worker 生成中文真实 transcript。
 
 ## Phase 2：AI Template 与 DeepSeek 结构化笔记
 

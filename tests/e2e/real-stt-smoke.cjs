@@ -7,7 +7,7 @@ async function main() {
   const root = path.resolve(__dirname, '..', '..');
   const exe = path.join(root, 'out', 'distill-win32-x64', 'distill.exe');
   const db = path.join(root, 'test-results', 'real-stt-ui.db');
-  const audio = path.join(root, 'test-fixtures', 'real-stt-english.wav');
+  const audio = path.join(root, 'test-fixtures', 'real-stt-chinese.wav');
   const python = process.env.DISTILL_PYTHON_COMMAND || path.join(root, 'python', '.venv', 'Scripts', 'python.exe');
 
   if (!fs.existsSync(exe)) {
@@ -57,7 +57,7 @@ async function main() {
       transcript
     }, null, 2));
 
-    if (!/hello|world|transcript/i.test(transcript)) {
+    if (!transcript.includes('中文语音转写')) {
       throw new Error(`Expected real STT transcript to contain spoken words, got: ${transcript}`);
     }
   } finally {
@@ -74,8 +74,11 @@ function ensureSpeechFixture(audioPath) {
   const command = [
     'Add-Type -AssemblyName System.Speech',
     '$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer',
+    "$voice = $synth.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -eq 'zh-CN' } | Select-Object -First 1",
+    "if (-not $voice) { throw 'No zh-CN speech synthesis voice is installed.' }",
+    '$synth.SelectVoice($voice.VoiceInfo.Name)',
     `$synth.SetOutputToWaveFile('${audioPath.replace(/'/g, "''")}')`,
-    "$synth.Speak('hello world this is a distill transcript test')",
+    "$synth.Speak('今天测试中文语音转写功能')",
     '$synth.Dispose()'
   ].join('; ');
   execFileSync('powershell', ['-NoProfile', '-Command', command], { stdio: 'ignore' });
