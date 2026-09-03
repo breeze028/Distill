@@ -25,6 +25,8 @@ async function main() {
   let audioElementCount = 0;
   let audioDuration = null;
   let seekTime = 0;
+  let seekPaused = true;
+  let seekReadyState = 0;
   let hasTranscriptScrollbar = false;
   let retranscribeStartedFresh = false;
   let retranscribeProgressVisible = false;
@@ -57,8 +59,15 @@ async function main() {
     await win.getByText('phase1-transcript-long-中文-test').first().waitFor();
     await win.getByText('这是第一阶段的模拟转写', { exact: false }).waitFor();
     await win.getByText('这是第30秒附近的模拟转写', { exact: false }).click();
-    await win.waitForTimeout(500);
-    seekTime = await win.locator('audio').evaluate((audio) => audio.currentTime);
+    await win.waitForTimeout(1800);
+    const seekState = await win.locator('audio').evaluate((audio) => ({
+      currentTime: audio.currentTime,
+      paused: audio.paused,
+      readyState: audio.readyState
+    }));
+    seekTime = seekState.currentTime;
+    seekPaused = seekState.paused;
+    seekReadyState = seekState.readyState;
     hasTranscriptScrollbar = await win.getByTestId('transcript-pane').evaluate((element) => {
       const styles = window.getComputedStyle(element);
       return styles.overflowY === 'scroll' && styles.scrollbarGutter.includes('stable') && element.scrollHeight > element.clientHeight;
@@ -122,6 +131,8 @@ async function main() {
         audioElementCount,
         audioDuration,
         seekTime,
+        seekPaused,
+        seekReadyState,
         appMenuRemoved,
         dragDropImported: Boolean(imported.recording),
         hasTranscriptScrollbar,
@@ -151,8 +162,14 @@ async function main() {
   if (!audioDuration || audioDuration <= 30) {
     throw new Error(`Expected playable audio duration above the 30s transcript segment, got ${audioDuration}.`);
   }
-  if (seekTime < 29) {
-    throw new Error(`Expected transcript segment click to seek near 30s, got ${seekTime}.`);
+  if (seekTime < 30.5) {
+    throw new Error(`Expected transcript segment click to play forward from 30s, got ${seekTime}.`);
+  }
+  if (seekPaused) {
+    throw new Error('Expected transcript segment click to start playback.');
+  }
+  if (seekReadyState < 2) {
+    throw new Error(`Expected audio to have current data after segment seek, got readyState ${seekReadyState}.`);
   }
   if (!hasTranscriptScrollbar) {
     throw new Error('Expected the transcript pane to reserve a visible stable scrollbar.');

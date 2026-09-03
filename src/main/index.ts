@@ -14,6 +14,7 @@ import { logger } from '@main/logging/logger';
 import { MockSpeechToTextService } from '@main/stt/mockSpeechToTextService';
 import { PythonSpeechToTextService } from '@main/stt/pythonSpeechToTextService';
 import { SelectableSpeechToTextService } from '@main/stt/selectableSpeechToTextService';
+import { resolveAudioRange } from '@main/audio/audioRange';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -110,6 +111,20 @@ function registerAudioProtocol(): void {
       return new Response('Audio file not found.', { status: 404 });
     }
 
-    return net.fetch(pathToFileURL(recording.filePath).toString());
+    const fileSize = fs.statSync(recording.filePath).size;
+    const range = resolveAudioRange(request.headers.get('range'), fileSize);
+    if (range.status === 416) {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          'Accept-Ranges': 'bytes',
+          'Content-Range': `bytes */${fileSize}`
+        }
+      });
+    }
+
+    return net.fetch(pathToFileURL(recording.filePath).toString(), {
+      headers: range.status === 206 ? { Range: `bytes=${range.start}-${range.end}` } : undefined
+    });
   });
 }

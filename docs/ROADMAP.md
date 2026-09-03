@@ -78,6 +78,7 @@
 - 已在转写运行中显示耗时提示，减少短音频等待时的不确定感。
 - 已将手动 Retranscribe 改为后台任务启动，UI 立即显示新任务耗时。
 - 已强化 transcript segment 点击回听，等待 metadata 和 seek 完成后再播放，避免从头播放。
+- 已为本地音频协议增加 byte range 响应，保证 M4A/MP3/WAV seek 后能从目标时间继续读取音频数据。
 - 已为 Transcript 面板增加独立、可见、稳定的垂直滚动条，并用长 transcript 验证实际 overflow。
 
 ## Phase 2：AI Template 与 DeepSeek 结构化笔记
