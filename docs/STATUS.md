@@ -102,7 +102,7 @@ pnpm dev
 - transcript segment 文本可见
 - 重开打包应用后 transcript 仍然可见
 - 点击 transcript segment 会 seek 到对应音频时间点
-- packaged app 使用 Python Worker + faster-whisper tiny 生成中文真实 transcript
+- packaged app 导入中文 `.m4a`，并使用 Python Worker + faster-whisper tiny 生成中文真实 transcript
 - audio element 加载到有效时长
 - Electron application menu 已移除
 - Inbox 和 Settings 可打开/收回

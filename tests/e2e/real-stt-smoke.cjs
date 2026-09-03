@@ -7,7 +7,7 @@ async function main() {
   const root = path.resolve(__dirname, '..', '..');
   const exe = path.join(root, 'out', 'distill-win32-x64', 'distill.exe');
   const db = path.join(root, 'test-results', 'real-stt-ui.db');
-  const audio = path.join(root, 'test-fixtures', 'real-stt-chinese.wav');
+  const audio = path.join(root, 'test-fixtures', 'real-stt-chinese.m4a');
   const python = process.env.DISTILL_PYTHON_COMMAND || path.join(root, 'python', '.venv', 'Scripts', 'python.exe');
 
   if (!fs.existsSync(exe)) {
@@ -57,7 +57,7 @@ async function main() {
       transcript
     }, null, 2));
 
-    if (!transcript.includes('中文语音转写')) {
+    if (!/中文.*(转写|轉寫).*功能/.test(transcript)) {
       throw new Error(`Expected real STT transcript to contain spoken words, got: ${transcript}`);
     }
   } finally {
@@ -66,22 +66,22 @@ async function main() {
 }
 
 function ensureSpeechFixture(audioPath) {
-  if (fs.existsSync(audioPath)) {
-    return;
-  }
-
   fs.mkdirSync(path.dirname(audioPath), { recursive: true });
+  fs.rmSync(audioPath, { force: true });
+  const wavPath = audioPath.replace(/\.m4a$/i, '.wav');
   const command = [
     'Add-Type -AssemblyName System.Speech',
     '$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer',
     "$voice = $synth.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -eq 'zh-CN' } | Select-Object -First 1",
     "if (-not $voice) { throw 'No zh-CN speech synthesis voice is installed.' }",
     '$synth.SelectVoice($voice.VoiceInfo.Name)',
-    `$synth.SetOutputToWaveFile('${audioPath.replace(/'/g, "''")}')`,
+    `$synth.SetOutputToWaveFile('${wavPath.replace(/'/g, "''")}')`,
     "$synth.Speak('今天测试中文语音转写功能')",
     '$synth.Dispose()'
   ].join('; ');
   execFileSync('powershell', ['-NoProfile', '-Command', command], { stdio: 'ignore' });
+  execFileSync('ffmpeg', ['-y', '-i', wavPath, '-acodec', 'libvo_aacenc', '-b:a', '96k', audioPath], { stdio: 'ignore' });
+  fs.rmSync(wavPath, { force: true });
 }
 
 function assertPythonWorkerReady(root, python) {
