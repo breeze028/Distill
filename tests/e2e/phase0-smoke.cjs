@@ -5,7 +5,7 @@ const { _electron } = require('playwright');
 
 async function main() {
   const root = path.resolve(__dirname, '..', '..');
-  const audio = path.join(root, 'test-fixtures', 'phase1-transcript-中文-test.m4a');
+  const audio = path.join(root, 'test-fixtures', 'phase1-transcript-long-中文-test.m4a');
   const db = path.join(root, 'test-results', 'phase0-ui.db');
   const exe = path.join(root, 'out', 'distill-win32-x64', 'distill.exe');
 
@@ -13,7 +13,7 @@ async function main() {
     fs.rmSync(`${db}${suffix}`, { force: true });
   }
   fs.mkdirSync(path.dirname(db), { recursive: true });
-  ensureAudioFixture(audio, 10);
+  ensureAudioFixture(audio, 75);
 
   const app = await launchApp(exe, db);
 
@@ -43,25 +43,25 @@ async function main() {
     await win.evaluate(() => window.location.reload());
     await win.waitForLoadState('domcontentloaded');
     await win.waitForTimeout(1000);
-    await win.getByText('phase1-transcript-中文-test').first().click();
+    await win.getByText('phase1-transcript-long-中文-test').first().click();
     await win.waitForTimeout(500);
     await win.getByRole('button', { name: 'Settings', exact: true }).click();
     await win.getByText('Speech-to-Text Model').waitFor();
     await win.getByText('Mock STT ready').waitFor();
     settingsText = await win.locator('body').innerText();
     await win.getByRole('button', { name: 'Settings', exact: true }).click();
-    await win.getByText('phase1-transcript-中文-test').first().waitFor();
+    await win.getByText('phase1-transcript-long-中文-test').first().waitFor();
     await win.getByRole('button', { name: 'Inbox' }).click();
     await win.getByText('Watch Folder', { exact: true }).waitFor();
     await win.getByRole('button', { name: 'Inbox' }).click();
-    await win.getByText('phase1-transcript-中文-test').first().waitFor();
+    await win.getByText('phase1-transcript-long-中文-test').first().waitFor();
     await win.getByText('这是第一阶段的模拟转写', { exact: false }).waitFor();
-    await win.getByText('后续会由 Python Worker', { exact: false }).click();
+    await win.getByText('这是第30秒附近的模拟转写', { exact: false }).click();
     await win.waitForTimeout(500);
     seekTime = await win.locator('audio').evaluate((audio) => audio.currentTime);
     hasTranscriptScrollbar = await win.getByTestId('transcript-pane').evaluate((element) => {
       const styles = window.getComputedStyle(element);
-      return styles.overflowY === 'scroll' && styles.scrollbarGutter.includes('stable');
+      return styles.overflowY === 'scroll' && styles.scrollbarGutter.includes('stable') && element.scrollHeight > element.clientHeight;
     });
 
     const detailBeforeRetranscribe = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
@@ -104,7 +104,7 @@ async function main() {
     const win = await reopenedApp.firstWindow();
     await win.waitForLoadState('domcontentloaded');
     await win.waitForTimeout(1000);
-    await win.getByText('phase1-transcript-中文-test').first().click();
+    await win.getByText('phase1-transcript-long-中文-test').first().click();
     await win.getByText('这是第一阶段的模拟转写', { exact: false }).waitFor();
     reopenedText = await win.locator('body').innerText();
   } finally {
@@ -128,7 +128,7 @@ async function main() {
         retranscribeStartedFresh,
         retranscribeProgressVisible,
         hasLibraryText: text.includes('Voice Library'),
-        hasDetailText: text.includes('phase1-transcript-中文-test'),
+        hasDetailText: text.includes('phase1-transcript-long-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
         autoTranscribedAfterImport: Boolean(imported.recording.jobs.find((job) => job.kind === 'transcription')),
         hasTranscriptText: text.includes('这是第一阶段的模拟转写'),
@@ -148,11 +148,11 @@ async function main() {
   if (audioElementCount !== 1) {
     throw new Error(`Expected one audio element, got ${audioElementCount}.`);
   }
-  if (!audioDuration || audioDuration <= 4.2) {
-    throw new Error(`Expected playable audio duration above segment start, got ${audioDuration}.`);
+  if (!audioDuration || audioDuration <= 30) {
+    throw new Error(`Expected playable audio duration above the 30s transcript segment, got ${audioDuration}.`);
   }
-  if (seekTime < 4) {
-    throw new Error(`Expected transcript segment click to seek near 4.2s, got ${seekTime}.`);
+  if (seekTime < 29) {
+    throw new Error(`Expected transcript segment click to seek near 30s, got ${seekTime}.`);
   }
   if (!hasTranscriptScrollbar) {
     throw new Error('Expected the transcript pane to reserve a visible stable scrollbar.');
@@ -169,7 +169,7 @@ async function main() {
   if (!imported.recording) {
     throw new Error('Expected drag-and-drop import to create a recording.');
   }
-  if (!text.includes('phase1-transcript-中文-test')) {
+  if (!text.includes('phase1-transcript-long-中文-test')) {
     throw new Error('Imported recording title was not visible.');
   }
   if (!settingsText.includes('Mock STT ready')) {
@@ -225,7 +225,8 @@ function launchApp(exe, db) {
       DISTILL_DB_PATH: db,
       DISTILL_STT_PROVIDER: 'mock',
       DISTILL_ALLOW_MOCK_STT: 'true',
-      DISTILL_MOCK_STT_DELAY_MS: '1500'
+      DISTILL_MOCK_STT_DELAY_MS: '1500',
+      DISTILL_MOCK_STT_SEGMENT_COUNT: '36'
     }
   });
 }

@@ -51,3 +51,5 @@ Renderer 是 React UI，使用 Zustand 管理应用状态。Renderer 只能调�
 ## 音频播放
 
 Renderer 使用 `distill-audio://recording/{id}`。Main 根据 recording ID 查找文件路径，并以安全协议流式返回音频文件。
+
+Transcript segment 点击回听在 Renderer 内完成：先等待 audio metadata 可用，再把目标时间限制在音频有效时长内，等待 seek 完成后播放。Transcript 面板本身负责独立滚动，避免长音频 transcript 撑开整个详情页布局。

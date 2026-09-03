@@ -81,7 +81,7 @@ export function App() {
   return (
     <div
       data-testid="app-shell"
-      className={cn('relative grid h-full grid-cols-[260px_minmax(320px,420px)_1fr] bg-background text-foreground', dragging && 'outline outline-2 outline-accent')}
+      className={cn('relative grid h-full min-h-0 grid-cols-[260px_minmax(320px,420px)_1fr] bg-background text-foreground', dragging && 'outline outline-2 outline-accent')}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -106,7 +106,7 @@ export function App() {
         onSelect={(id) => void selectRecording(id)}
         onImport={() => void importFromDialog()}
       />
-      <main className="min-w-0 border-l border-border bg-surface-elevated">
+      <main className="min-h-0 min-w-0 border-l border-border bg-surface-elevated">
         {error ? <ErrorBanner message={error} /> : null}
         {viewMode === 'settings' ? (
           <SettingsPane
@@ -250,7 +250,7 @@ function LibraryPane(props: {
   onImport(): void;
 }) {
   return (
-    <section className="flex min-w-0 flex-col bg-background">
+    <section className="flex min-h-0 min-w-0 flex-col bg-background">
       <header className="flex h-14 items-center justify-between border-b border-border px-4">
         <div>
           <h1 className="text-base font-semibold">Voice Library</h1>
@@ -350,7 +350,7 @@ function RecordingDetailPane(props: {
   const isTranscribing = props.isTranscribing || transcriptionJob?.state === 'running' || recording.processingState === 'running';
 
   return (
-    <article className="flex h-full min-w-0 flex-col">
+    <article className="flex h-full min-h-0 min-w-0 flex-col">
       <header className="border-b border-border px-8 py-5">
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
@@ -363,7 +363,7 @@ function RecordingDetailPane(props: {
           </div>
         </div>
         <div className="mt-5 flex items-center gap-3">
-          <audio ref={audioRef} className="h-10 flex-1" src={`distill-audio://recording/${recording.id}`} controls />
+          <audio ref={audioRef} className="h-10 flex-1" src={`distill-audio://recording/${recording.id}`} controls preload="metadata" />
           <select
             className="h-9 rounded border border-input bg-background px-2 text-sm"
             value={playbackRate}
@@ -419,7 +419,7 @@ function RecordingDetailPane(props: {
                   segment={segment}
                   onClick={() => {
                     if (audioRef.current) {
-                      seekAudioToSegment(audioRef.current, segment.startTime);
+                      void seekAudioToSegment(audioRef.current, segment.startTime);
                     }
                   }}
                 />
@@ -495,30 +495,82 @@ function TranscriptionProgressNotice(props: { job: ProcessingJob }) {
   );
 }
 
-function seekAudioToSegment(audio: HTMLAudioElement, startTime: number): void {
-  const targetTime = Math.max(0, startTime);
-  const playAfterSeek = () => {
-    const onSeeked = () => {
-      void audio.play().catch(() => undefined);
-    };
+async function seekAudioToSegment(audio: HTMLAudioElement, startTime: number): Promise<void> {
+  await waitForMediaMetadata(audio);
+  const targetTime = clampSeekTime(audio, startTime);
+  audio.pause();
+  await setAudioCurrentTime(audio, targetTime);
+  await audio.play().catch(() => undefined);
+}
 
-    audio.pause();
-    audio.addEventListener('seeked', onSeeked, { once: true });
-    audio.currentTime = targetTime;
-    window.setTimeout(() => {
-      if (Math.abs(audio.currentTime - targetTime) < 0.25) {
-        void audio.play().catch(() => undefined);
-      }
-    }, 120);
-  };
-
+function waitForMediaMetadata(audio: HTMLAudioElement): Promise<void> {
   if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
-    playAfterSeek();
-    return;
+    return Promise.resolve();
   }
 
-  audio.addEventListener('loadedmetadata', playAfterSeek, { once: true });
-  audio.load();
+  return new Promise((resolve) => {
+    const finish = () => {
+      audio.removeEventListener('loadedmetadata', finish);
+      audio.removeEventListener('durationchange', finish);
+      resolve();
+    };
+
+    audio.addEventListener('loadedmetadata', finish, { once: true });
+    audio.addEventListener('durationchange', finish, { once: true });
+    audio.load();
+  });
+}
+
+function clampSeekTime(audio: HTMLAudioElement, startTime: number): number {
+  const safeStart = Math.max(0, startTime);
+  if (!Number.isFinite(audio.duration) || audio.duration <= 0) {
+    return safeStart;
+  }
+
+  return Math.min(safeStart, Math.max(0, audio.duration - 0.05));
+}
+
+function setAudioCurrentTime(audio: HTMLAudioElement, targetTime: number): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeout = 0;
+    const toleranceSeconds = 0.35;
+
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      audio.removeEventListener('seeked', settle);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+
+    const settle = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolve();
+    };
+
+    const handleTimeUpdate = () => {
+      if (Math.abs(audio.currentTime - targetTime) <= toleranceSeconds) {
+        settle();
+      }
+    };
+
+    audio.addEventListener('seeked', settle, { once: true });
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    timeout = window.setTimeout(settle, 800);
+
+    if (typeof audio.fastSeek === 'function') {
+      audio.fastSeek(targetTime);
+    } else {
+      audio.currentTime = targetTime;
+    }
+
+    if (Math.abs(audio.currentTime - targetTime) <= toleranceSeconds) {
+      settle();
+    }
+  });
 }
 
 function getLatestTranscriptionJob(recording: RecordingDetail): ProcessingJob | null {

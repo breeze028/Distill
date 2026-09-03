@@ -79,4 +79,25 @@ select {
 
 .stable-scrollbar {
   scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.6) hsl(var(--surface-elevated));
+}
+
+.stable-scrollbar::-webkit-scrollbar {
+  width: 12px;
+}
+
+.stable-scrollbar::-webkit-scrollbar-track {
+  background: hsl(var(--surface-elevated));
+  border-left: 1px solid hsl(var(--border));
+}
+
+.stable-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.55);
+  border: 3px solid hsl(var(--surface-elevated));
+  border-radius: 999px;
+}
+
+.stable-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.75);
 }
