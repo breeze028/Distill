@@ -2,6 +2,11 @@ import type { SpeechToTextResult, SpeechToTextService } from './types';
 
 export class MockSpeechToTextService implements SpeechToTextService {
   async transcribe(): Promise<SpeechToTextResult> {
+    const delayMs = Number(process.env.DISTILL_MOCK_STT_DELAY_MS ?? 0);
+    if (Number.isFinite(delayMs) && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
     return {
       language: 'zh',
       duration: null,

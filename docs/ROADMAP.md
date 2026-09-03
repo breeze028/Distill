@@ -47,7 +47,8 @@
 - 用 `ProcessingJob` 追踪 pending、running、succeeded、failed
 - UI 显示 Transcribing、Failed、Retry 等状态
 - UI 显示转写 elapsed time，并解释首次模型下载/加载导致的等待
-- 点击 Transcript Segment 后音频 seek 到 segment start time
+- Transcript 面板支持长文本滚动阅读
+- 点击 Transcript Segment 后音频稳定 seek 到 segment start time
 - 保留 mock STT 测试，不让自动化测试依赖真实 Whisper 模型
 - 真实用户导入默认走 Python Worker，mock STT 只用于显式测试/开发
 
@@ -75,6 +76,9 @@
 - 已给 transcript 增加来源元数据，并在 UI 中提示旧 mock/占位 transcript 需要重新转写。
 - 已将默认模型改为 `faster-whisper-tiny`，并在 Settings 提供常用模型选择。
 - 已在转写运行中显示耗时提示，减少短音频等待时的不确定感。
+- 已将手动 Retranscribe 改为后台任务启动，UI 立即显示新任务耗时。
+- 已强化 transcript segment 点击回听，等待 seek 完成后再播放，避免从头播放。
+- 已为 Transcript 面板保留稳定滚动条槽位。
 
 ## Phase 2：AI Template 与 DeepSeek 结构化笔记
 

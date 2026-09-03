@@ -25,6 +25,9 @@ async function main() {
   let audioElementCount = 0;
   let audioDuration = null;
   let seekTime = 0;
+  let hasTranscriptScrollbar = false;
+  let retranscribeStartedFresh = false;
+  let retranscribeProgressVisible = false;
 
   try {
     const win = await app.firstWindow();
@@ -56,6 +59,28 @@ async function main() {
     await win.getByText('后续会由 Python Worker', { exact: false }).click();
     await win.waitForTimeout(500);
     seekTime = await win.locator('audio').evaluate((audio) => audio.currentTime);
+    hasTranscriptScrollbar = await win.getByTestId('transcript-pane').evaluate((element) => {
+      const styles = window.getComputedStyle(element);
+      return styles.overflowY === 'scroll' && styles.scrollbarGutter.includes('stable');
+    });
+
+    const detailBeforeRetranscribe = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
+    const previousJobId = detailBeforeRetranscribe.jobs.find((job) => job.kind === 'transcription')?.id;
+    const clickedAt = Date.now();
+    await win.getByRole('button', { name: 'Retranscribe' }).click();
+    await win.getByText(/Transcribing · 00:0[0-3]/).waitFor();
+    retranscribeProgressVisible = true;
+    const detailDuringRetranscribe = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
+    const runningJob = detailDuringRetranscribe.jobs.find((job) => job.kind === 'transcription' && job.state === 'running');
+    retranscribeStartedFresh = Boolean(
+      runningJob &&
+      runningJob.id !== previousJobId &&
+      runningJob.startedAt &&
+      new Date(runningJob.startedAt).getTime() >= clickedAt - 2000
+    );
+    if (runningJob) {
+      await waitForTranscriptJob(win, imported.recording.id, runningJob.id, 30000);
+    }
 
     text = await win.locator('body').innerText();
     await win.screenshot({
@@ -99,6 +124,9 @@ async function main() {
         seekTime,
         appMenuRemoved,
         dragDropImported: Boolean(imported.recording),
+        hasTranscriptScrollbar,
+        retranscribeStartedFresh,
+        retranscribeProgressVisible,
         hasLibraryText: text.includes('Voice Library'),
         hasDetailText: text.includes('phase1-transcript-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
@@ -125,6 +153,15 @@ async function main() {
   }
   if (seekTime < 4) {
     throw new Error(`Expected transcript segment click to seek near 4.2s, got ${seekTime}.`);
+  }
+  if (!hasTranscriptScrollbar) {
+    throw new Error('Expected the transcript pane to reserve a visible stable scrollbar.');
+  }
+  if (!retranscribeStartedFresh) {
+    throw new Error('Expected Retranscribe to create a fresh running transcription job.');
+  }
+  if (!retranscribeProgressVisible) {
+    throw new Error('Expected Retranscribe progress to be visible immediately.');
   }
   if (!appMenuRemoved) {
     throw new Error('Expected Electron application menu to be removed.');
@@ -187,7 +224,8 @@ function launchApp(exe, db) {
       ...process.env,
       DISTILL_DB_PATH: db,
       DISTILL_STT_PROVIDER: 'mock',
-      DISTILL_ALLOW_MOCK_STT: 'true'
+      DISTILL_ALLOW_MOCK_STT: 'true',
+      DISTILL_MOCK_STT_DELAY_MS: '1500'
     }
   });
 }
@@ -210,6 +248,24 @@ async function waitForTranscript(win, recordingId, timeoutMs) {
 
   const recording = await win.evaluate((id) => window.distillAPI.getRecording(id), recordingId);
   throw new Error(`Timed out waiting for transcript. Last processing state: ${recording?.processingState ?? 'missing'}`);
+}
+
+async function waitForTranscriptJob(win, recordingId, jobId, timeoutMs) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const recording = await win.evaluate((id) => window.distillAPI.getRecording(id), recordingId);
+    const job = recording?.jobs.find((item) => item.id === jobId);
+    if (job?.state === 'succeeded') {
+      return recording;
+    }
+    if (job?.state === 'failed') {
+      throw new Error(`Transcription failed: ${job.errorMessage}`);
+    }
+
+    await win.waitForTimeout(500);
+  }
+
+  throw new Error(`Timed out waiting for transcription job ${jobId}.`);
 }
 
 function ensureAudioFixture(audioPath, durationSeconds) {

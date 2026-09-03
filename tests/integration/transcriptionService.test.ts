@@ -75,6 +75,27 @@ describe('TranscriptionService', () => {
     expect(detail.processingState).toBe('succeeded');
     expect(detail.transcript?.fullText).toContain('后台转写完成');
   });
+
+  it('returns a fresh running job when retranscribing an existing transcript', async () => {
+    const repository = new RecordingRepository(dbManager.open());
+    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }));
+    const filePath = path.join(tmpDir, '重新转写.m4a');
+    fs.writeFileSync(filePath, Buffer.from('fake-audio'));
+    const imported = await importer.importFile(filePath);
+    const service = new TranscriptionService(repository, new DelayedStt());
+    const firstStarted = service.startTranscription(imported.recording.id);
+    const firstJob = firstStarted.jobs.find((job) => job.kind === 'transcription' && job.state === 'running');
+    expect(firstJob).toBeDefined();
+    await waitForTranscriptJob(repository, imported.recording.id, firstJob?.id ?? '');
+
+    const secondStarted = service.startTranscription(imported.recording.id);
+    const secondJob = secondStarted.jobs.find((job) => job.kind === 'transcription' && job.state === 'running');
+
+    expect(secondJob).toBeDefined();
+    expect(secondJob?.id).not.toBe(firstJob?.id);
+    expect(secondJob?.startedAt).not.toBe(firstJob?.startedAt);
+    await waitForTranscriptJob(repository, imported.recording.id, secondJob?.id ?? '');
+  });
 });
 
 class SuccessfulStt implements SpeechToTextService {
@@ -147,4 +168,16 @@ async function waitForTranscript(repository: RecordingRepository, recordingId: s
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error('Timed out waiting for transcript.');
+}
+
+async function waitForTranscriptJob(repository: RecordingRepository, recordingId: string, jobId: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const detail = repository.getRecording(recordingId);
+    const job = detail?.jobs.find((item) => item.id === jobId);
+    if (job?.state === 'succeeded') {
+      return detail;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('Timed out waiting for transcription job.');
 }

@@ -377,10 +377,10 @@ function RecordingDetailPane(props: {
           <Button
             variant="secondary"
             onClick={() => props.onTranscribe(recording.id)}
-            disabled={props.isTranscribing}
+            disabled={isTranscribing}
             title={recording.transcript ? 'Regenerate transcript' : 'Transcribe recording'}
           >
-            {props.isTranscribing ? 'Transcribing...' : recording.transcript ? 'Retranscribe' : 'Transcribe Recording'}
+            {isTranscribing ? 'Transcribing...' : recording.transcript ? 'Retranscribe' : 'Transcribe Recording'}
           </Button>
         </div>
         {transcriptionError ? (
@@ -408,7 +408,7 @@ function RecordingDetailPane(props: {
           )}
         </section>
 
-        <section className="min-w-0 overflow-y-auto px-8 py-6">
+        <section data-testid="transcript-pane" className="stable-scrollbar min-w-0 overflow-y-scroll px-8 py-6">
           <SectionTitle title="Transcript" />
           {recording.transcript?.segments.length ? (
             <div className="space-y-3">
@@ -419,8 +419,7 @@ function RecordingDetailPane(props: {
                   segment={segment}
                   onClick={() => {
                     if (audioRef.current) {
-                      audioRef.current.currentTime = segment.startTime;
-                      void audioRef.current.play();
+                      seekAudioToSegment(audioRef.current, segment.startTime);
                     }
                   }}
                 />
@@ -496,6 +495,32 @@ function TranscriptionProgressNotice(props: { job: ProcessingJob }) {
   );
 }
 
+function seekAudioToSegment(audio: HTMLAudioElement, startTime: number): void {
+  const targetTime = Math.max(0, startTime);
+  const playAfterSeek = () => {
+    const onSeeked = () => {
+      void audio.play().catch(() => undefined);
+    };
+
+    audio.pause();
+    audio.addEventListener('seeked', onSeeked, { once: true });
+    audio.currentTime = targetTime;
+    window.setTimeout(() => {
+      if (Math.abs(audio.currentTime - targetTime) < 0.25) {
+        void audio.play().catch(() => undefined);
+      }
+    }, 120);
+  };
+
+  if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+    playAfterSeek();
+    return;
+  }
+
+  audio.addEventListener('loadedmetadata', playAfterSeek, { once: true });
+  audio.load();
+}
+
 function getLatestTranscriptionJob(recording: RecordingDetail): ProcessingJob | null {
   return recording.jobs.find((job) => job.kind === 'transcription') ?? null;
 }
@@ -506,7 +531,11 @@ function isMockTranscript(recording: RecordingDetail): boolean {
 
 function TranscriptRow(props: { segment: TranscriptSegment; onClick(): void }) {
   return (
-    <button className="grid w-full grid-cols-[64px_1fr] gap-4 rounded px-2 py-2 text-left hover:bg-muted" onClick={props.onClick}>
+    <button
+      data-testid="transcript-row"
+      className="grid w-full grid-cols-[64px_1fr] gap-4 rounded px-2 py-2 text-left hover:bg-muted"
+      onClick={props.onClick}
+    >
       <span className="text-xs tabular-nums text-muted-foreground">{formatTimestamp(props.segment.startTime)}</span>
       <span className="text-sm leading-6">{props.segment.text}</span>
     </button>

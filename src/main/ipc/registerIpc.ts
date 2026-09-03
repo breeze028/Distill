@@ -50,6 +50,8 @@ export function registerIpcHandlers(dependencies: {
     return importAndMaybeTranscribe(parsed.filePath);
   });
 
+  ipcMain.handle(ipcChannels.recordingsStartTranscription, (_event, id: string) => dependencies.transcriber.startTranscription(id));
+
   ipcMain.handle(ipcChannels.recordingsTranscribe, (_event, id: string) => dependencies.transcriber.transcribeRecording(id));
 
   ipcMain.handle(ipcChannels.recordingsSearch, (_event, query: string) => dependencies.recordings.search(query));

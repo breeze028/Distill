@@ -44,7 +44,8 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - Settings 中可控制是否导入后自动转写。
 - mock STT 转写结果会保存为 `Transcript` 和 `TranscriptSegment`。
 - Recording Detail 可以展示 transcript segment。
-- 点击 transcript segment 可以让音频 seek 到该句起始时间并播放。
+- Transcript 面板保留稳定滚动条槽位，长 transcript 可以明确滚动阅读。
+- 点击 transcript segment 会等待音频 metadata/seek 完成后再播放，避免从 0 秒开始。
 - Python Worker 已接入 faster-whisper 调用。
 - Main 到 Python Worker 的 JSON 进程协议已增加响应校验、结构化错误、超时和打包路径解析。
 - 打包配置会把 `python/` 作为 extra resource 带入应用。
@@ -61,6 +62,7 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - Python STT 未显式配置命令时，会优先发现源码目录下的 `python\.venv\Scripts\python.exe`；从 `out\distill-win32-x64\distill.exe` 手动启动打包应用时也会回溯到项目 venv。
 - Recording Detail 会识别旧 mock/占位 transcript，并提示使用 Python Worker 重新转写。
 - Recording Detail 在转写运行中会显示已耗时，并提示首次模型下载/加载可能导致等待变长。
+- 手动 Retranscribe 会先创建新的后台 `ProcessingJob` 并立即刷新 UI，处理耗时从本次任务开始计算。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -109,7 +111,9 @@ pnpm dev
 - 转写后展示 transcript segment
 - transcript segment 文本可见
 - 重开打包应用后 transcript 仍然可见
+- Transcript 面板使用稳定 scrollbar
 - 点击 transcript segment 会 seek 到对应音频时间点
+- 点击 Retranscribe 会立即显示新任务的运行耗时
 - packaged app 导入中文 `.m4a`，并使用 Python Worker + faster-whisper tiny 生成中文真实 transcript
 - packaged app 在不注入 `DISTILL_PYTHON_COMMAND` 时也能自动发现项目 Python venv
 - transcript 会保存来源 provider、模型和生成它的 ProcessingJob ID

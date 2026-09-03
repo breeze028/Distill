@@ -141,9 +141,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       viewMode: 'library'
     }));
     try {
-      const recording = await window.distillAPI.transcribeRecording(id);
+      const recording = await window.distillAPI.startTranscription(id);
       const recordings = await window.distillAPI.listRecordings();
       set({ recordings, selectedRecording: recording });
+      void get().pollRecordingUntilIdle(id);
     } catch (error) {
       const recording = await window.distillAPI.getRecording(id).catch(() => null);
       const recordings = await window.distillAPI.listRecordings().catch(() => get().recordings);
