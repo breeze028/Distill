@@ -18,6 +18,7 @@ export type DistillApi = {
   getRecording(id: string): Promise<RecordingDetail | null>;
   importRecordingFromDialog(): Promise<ImportRecordingResult | null>;
   importRecordingFromPath(filePath: string): Promise<ImportRecordingResult>;
+  getPathForFile(file: File): string;
   transcribeRecording(id: string): Promise<RecordingDetail>;
   searchRecordings(query: string): Promise<RecordingListItem[]>;
   getSettings(): Promise<AppSettings>;

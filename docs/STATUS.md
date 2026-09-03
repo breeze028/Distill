@@ -25,6 +25,7 @@ Phase 1 当前目标：建立转写任务主干，逐步接入真实本地 speec
 - 创建 Python Worker 基础目录与占位 worker。
 - 创建 `Recording`、`Transcript`、`TranscriptSegment`、`AIArtifact`、`AITemplate`、`Tag`、`RecordingTag`、`ProcessingJob`、`AppSetting` 初始 schema。
 - 实现 `.m4a`、`.mp3`、`.wav` 手动导入。
+- 实现窗口级拖拽导入 `.m4a`、`.mp3`、`.wav`，支持一次拖入多个音频文件。
 - 导入后保存原始文件名、路径、导入时间、时长、大小、创建时间和格式。
 - 实现重复导入检测。
 - 实现 Library 列表。
@@ -100,6 +101,7 @@ pnpm dev
 - Transcript / AIArtifact / FTS 搜索基础 pipeline
 - packaged app 启动
 - packaged app 导入真实 `.m4a`
+- packaged app 通过拖拽导入音频
 - 导入后持久化
 - 点击录音进入详情
 - 导入后自动触发 mock 转写

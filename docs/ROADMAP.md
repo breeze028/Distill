@@ -24,10 +24,16 @@
 - Electron Forge、pnpm、Vitest、Playwright
 - Python Worker 基础目录
 - `Recording` 导入、持久化、Library 展示、Detail 打开、音频播放
+- 窗口级拖拽导入音频
 - `LLMProvider`、`SpeechToTextService`、`AIArtifact`、`ProcessingJob` 等扩展边界
 - 中文项目文档和 AI 开发规则
 
 状态：已完成。
+
+补充进度：
+
+- 已支持把 `.m4a`、`.mp3`、`.wav` 直接拖入应用窗口导入。
+- 拖拽导入通过 preload 的类型化 API 获取本地文件路径，保持 Renderer 与 Node/Electron 能力隔离。
 
 ## Phase 1：真实本地转写闭环
 

@@ -21,6 +21,8 @@ Main process 持有可信能力：文件系统、数据库、应用设置、音�
 
 Renderer 是 React UI，使用 Zustand 管理应用状态。Renderer 只能调用 preload 暴露的 `window.distillAPI`。
 
+拖拽导入时，Renderer 只读取浏览器 `File` 对象并调用 `window.distillAPI.getPathForFile`；本地路径解析由 Preload 通过 Electron `webUtils.getPathForFile` 完成，避免 Renderer 直接访问 Electron/Node API。
+
 ## 数据库
 
 初始 schema 包含：

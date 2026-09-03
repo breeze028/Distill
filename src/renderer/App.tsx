@@ -22,7 +22,7 @@ export function App() {
     load,
     selectRecording,
     importFromDialog,
-    importFromPath,
+    importFromPaths,
     transcribeRecording,
     search,
     showLibrary,
@@ -32,31 +32,62 @@ export function App() {
     refreshSpeechToTextStatus
   } = useLibraryStore();
   const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  function handleDragEnter(event: React.DragEvent) {
+    event.preventDefault();
+    if (!hasDraggedFiles(event)) {
+      return;
+    }
+
+    dragDepth.current += 1;
+    setDragging(true);
+  }
+
+  function handleDragOver(event: React.DragEvent) {
+    event.preventDefault();
+    if (hasDraggedFiles(event)) {
+      event.dataTransfer.dropEffect = 'copy';
+      setDragging(true);
+    }
+  }
+
+  function handleDragLeave(event: React.DragEvent) {
+    event.preventDefault();
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) {
+      setDragging(false);
+    }
+  }
+
   function handleDrop(event: React.DragEvent) {
     event.preventDefault();
+    dragDepth.current = 0;
     setDragging(false);
-    const file = Array.from(event.dataTransfer.files).find((item) => /\.(m4a|mp3|wav)$/i.test(item.name));
-    const filePath = (file as File & { path?: string } | undefined)?.path;
-    if (filePath) {
-      void importFromPath(filePath);
+    const filePaths = Array.from(event.dataTransfer.files)
+      .filter(isSupportedAudioFile)
+      .map(getDroppedFilePath)
+      .filter((filePath) => filePath.length > 0);
+
+    if (filePaths.length > 0) {
+      void importFromPaths(filePaths);
     }
   }
 
   return (
     <div
-      className={cn('grid h-full grid-cols-[260px_minmax(320px,420px)_1fr] bg-background text-foreground', dragging && 'outline outline-2 outline-accent')}
-      onDragOver={(event) => {
-        event.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={() => setDragging(false)}
+      data-testid="app-shell"
+      className={cn('relative grid h-full grid-cols-[260px_minmax(320px,420px)_1fr] bg-background text-foreground', dragging && 'outline outline-2 outline-accent')}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {dragging ? <DropOverlay /> : null}
       <Sidebar
         query={query}
         activeView={viewMode}
@@ -99,6 +130,31 @@ export function App() {
       </main>
     </div>
   );
+}
+
+function DropOverlay() {
+  return (
+    <div data-testid="drop-overlay" className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-accent/10 backdrop-blur-[1px]">
+      <div className="flex min-h-[156px] min-w-[320px] flex-col items-center justify-center rounded border border-accent bg-background/95 px-8 py-6 text-center shadow-sm">
+        <Upload className="mb-3 h-8 w-8 text-accent" />
+        <div className="text-base font-semibold">释放以导入音频</div>
+        <p className="mt-2 text-sm text-muted-foreground">支持 M4A、MP3、WAV，可一次拖入多个文件。</p>
+      </div>
+    </div>
+  );
+}
+
+function hasDraggedFiles(event: React.DragEvent): boolean {
+  return Array.from(event.dataTransfer.types).includes('Files');
+}
+
+function isSupportedAudioFile(file: File): boolean {
+  return /\.(m4a|mp3|wav)$/i.test(file.name);
+}
+
+function getDroppedFilePath(file: File): string {
+  const testPaths = (window as Window & { __distillTestDroppedFilePaths?: Record<string, string> }).__distillTestDroppedFilePaths;
+  return testPaths?.[file.name] ?? window.distillAPI.getPathForFile(file);
 }
 
 function Sidebar(props: {

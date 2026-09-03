@@ -19,6 +19,7 @@ type LibraryState = {
   selectRecording(id: string): Promise<void>;
   importFromDialog(): Promise<void>;
   importFromPath(filePath: string): Promise<void>;
+  importFromPaths(filePaths: string[]): Promise<void>;
   transcribeRecording(id: string): Promise<void>;
   search(query: string): Promise<void>;
   showLibrary(): void;
@@ -100,6 +101,32 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       if (hasRunningTranscription(result.recording)) {
         void get().pollRecordingUntilIdle(result.recording.id);
       }
+    } catch (error) {
+      set({ error: toMessage(error) });
+    } finally {
+      set({ importing: false });
+    }
+  },
+
+  async importFromPaths(filePaths) {
+    const uniquePaths = [...new Set(filePaths)];
+    if (uniquePaths.length === 0) {
+      return;
+    }
+
+    set({ importing: true, error: null, viewMode: 'library' });
+    try {
+      let selectedRecording: RecordingDetail | null = null;
+      for (const filePath of uniquePaths) {
+        const result = await window.distillAPI.importRecordingFromPath(filePath);
+        selectedRecording = result.recording;
+        if (hasRunningTranscription(result.recording)) {
+          void get().pollRecordingUntilIdle(result.recording.id);
+        }
+      }
+
+      const recordings = await window.distillAPI.listRecordings();
+      set({ recordings, selectedRecording });
     } catch (error) {
       set({ error: toMessage(error) });
     } finally {

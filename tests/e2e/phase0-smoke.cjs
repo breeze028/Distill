@@ -32,7 +32,10 @@ async function main() {
     await win.waitForTimeout(1000);
     appMenuRemoved = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null);
 
-    imported = await win.evaluate((filePath) => window.distillAPI.importRecordingFromPath(filePath), audio);
+    await dragImportRecording(win, audio);
+    const droppedRecordings = await waitForRecordingCount(win, 1, 30000);
+    const droppedRecording = await win.evaluate((id) => window.distillAPI.getRecording(id), droppedRecordings[0].id);
+    imported = { recording: droppedRecording, wasDuplicate: false };
     await waitForTranscript(win, imported.recording.id, 30000);
     await win.evaluate(() => window.location.reload());
     await win.waitForLoadState('domcontentloaded');
@@ -95,6 +98,7 @@ async function main() {
         audioDuration,
         seekTime,
         appMenuRemoved,
+        dragDropImported: Boolean(imported.recording),
         hasLibraryText: text.includes('Voice Library'),
         hasDetailText: text.includes('phase1-transcript-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
@@ -125,6 +129,9 @@ async function main() {
   if (!appMenuRemoved) {
     throw new Error('Expected Electron application menu to be removed.');
   }
+  if (!imported.recording) {
+    throw new Error('Expected drag-and-drop import to create a recording.');
+  }
   if (!text.includes('phase1-transcript-中文-test')) {
     throw new Error('Imported recording title was not visible.');
   }
@@ -140,6 +147,37 @@ async function main() {
   if (!reopenedText.includes('这是第一阶段的模拟转写')) {
     throw new Error('Transcript segment text was not persisted after reopening the app.');
   }
+}
+
+async function dragImportRecording(win, audioPath) {
+  const fileName = path.basename(audioPath);
+  await win.evaluate(({ fileName: name, filePath }) => {
+    window.__distillTestDroppedFilePaths = { [name]: filePath };
+  }, { fileName, filePath: audioPath });
+
+  const dataTransfer = await win.evaluateHandle((name) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(['dragged audio placeholder'], name, { type: 'audio/mp4' }));
+    return transfer;
+  }, fileName);
+
+  await win.dispatchEvent('[data-testid="app-shell"]', 'dragenter', { dataTransfer });
+  await win.getByTestId('drop-overlay').waitFor();
+  await win.dispatchEvent('[data-testid="app-shell"]', 'drop', { dataTransfer });
+  await win.getByTestId('drop-overlay').waitFor({ state: 'detached' });
+}
+
+async function waitForRecordingCount(win, count, timeoutMs) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const recordings = await win.evaluate(() => window.distillAPI.listRecordings());
+    if (recordings.length >= count) {
+      return recordings;
+    }
+    await win.waitForTimeout(500);
+  }
+  const recordings = await win.evaluate(() => window.distillAPI.listRecordings());
+  throw new Error(`Timed out waiting for ${count} recording(s), got ${recordings.length}.`);
 }
 
 function launchApp(exe, db) {
