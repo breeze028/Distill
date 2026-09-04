@@ -66,6 +66,26 @@ describe('AIArtifactService', () => {
     ]);
   });
 
+  it('deletes an AI artifact history entry and refreshes the latest artifact search content', async () => {
+    const { repository, recordingId } = await createRecordingWithTranscript();
+    const service = new AIArtifactService(repository, new TemplateEchoLLM(), mockSettings());
+
+    await service.generateArtifact(recordingId, 'default-summary');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const generated = await service.generateArtifact(recordingId, 'technical-thinking');
+    const technicalArtifact = generated.latestArtifact;
+    if (!technicalArtifact) {
+      throw new Error('Expected generated artifact.');
+    }
+
+    const updated = repository.deleteAIArtifact(recordingId, technicalArtifact.id);
+
+    expect(updated.latestArtifact?.templateId).toBe('default-summary');
+    expect(updated.artifacts.map((artifact) => artifact.templateId)).toEqual(['default-summary']);
+    expect(repository.search('technical-thinking').map((item) => item.id)).not.toContain(recordingId);
+    expect(repository.search('default-summary').map((item) => item.id)).toContain(recordingId);
+  });
+
   it('requires a transcript before generating AI notes', async () => {
     const db = dbManager.open();
     const repository = new RecordingRepository(db);

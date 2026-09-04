@@ -96,6 +96,7 @@
 - 使用 Zod validation 校验模型输出
 - 保存 `AIArtifact`，包括 provider、model、promptVersion、content、rawResponse
 - JSON 解析失败时保留 raw response，并支持重新生成
+- History 记录支持右键删除，并同步刷新最新展示与搜索索引
 - Settings 页面管理 provider、model 和 API Key
 
 验收重点：
@@ -117,11 +118,12 @@
 - 已在失败提示中以折叠方式展示 job 诊断详情，支持查看 JSON/schema 解析失败时的 raw response。
 - 已增加 Summary 区域模板选择 UI，并通过 Main IPC 只暴露 renderer-safe 的模板元数据。
 - 已在 Recording Detail 中返回完整 `AIArtifact` 历史，并在 Summary 区域支持多版本切换查看。
+- 已支持右键删除 AI History 里的单条 artifact，删除后最新 artifact 会回退到剩余历史并刷新搜索索引。
 
 下一步：
 
 - 设计更细的重试策略，包括保留失败原因、重用模板和避免重复并发生成。
-- 改进 artifact history 的版本命名、模板筛选和删除策略。
+- 改进 artifact history 的版本命名和模板筛选。
 
 ## Phase 3：搜索与资料库体验
 

@@ -80,6 +80,7 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - Summary 区域已增加 AI 模板选择，下拉只读取 Main 暴露的模板元数据，实际 prompt/schema 不进入 Renderer。
 - AI 笔记生成会创建 `ProcessingJob(kind='ai')`，运行中显示耗时，成功后写入 `AIArtifact`，失败后显示错误、诊断详情并可重试。
 - Recording Detail 已返回完整 `artifacts` 历史，Summary 区域可在多次生成结果之间切换查看。
+- AI History 记录支持右键显示 Delete 并删除单条 `AIArtifact`；删除后 Summary 会回退到剩余最新版本，搜索索引同步刷新。
 - DeepSeek provider 已增加基础错误分类：API Key/权限错误、频率或额度限制、服务端错误、响应缺失和 JSON/schema 错误。
 - AI 笔记生成失败时会把 provider raw response 写入 `ProcessingJob.errorDetail`，并在 UI 中以折叠诊断详情展示。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
@@ -138,6 +139,7 @@ pnpm dev
 - mock LLM 生成的 `AIArtifact` 可在详情页 Summary 区展示并持久化
 - 选择 `technical-thinking` 模板后生成 AI 笔记，mock 摘要确认使用对应 template id
 - 连续两次生成 AI 笔记后，详情页展示 artifact history，数据库保留两条历史并以最新版本作为默认展示；点击旧版本可切换正文
+- 右键 AI artifact history 记录会显示 Delete；删除旧版本后数据库、Summary 和搜索索引同步更新
 - AI 生成任务成功/失败会写入 `ProcessingJob`
 - DeepSeek provider 错误分类、raw response 保留和失败诊断详情展示
 - LLM provider 选择默认使用 DeepSeek，默认模型为 `deepseek-v4-flash`，mock LLM 只在显式测试/开发环境启用

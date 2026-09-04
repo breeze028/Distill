@@ -323,6 +323,27 @@ export class RecordingRepository {
     return { ...input, id, createdAt, content };
   }
 
+  deleteAIArtifact(recordingId: string, artifactId: string): RecordingDetail {
+    const artifact = this.db
+      .prepare('SELECT id FROM ai_artifact WHERE id = ? AND recording_id = ?')
+      .get(artifactId, recordingId) as { id: string } | undefined;
+    if (!artifact) {
+      throw new Error('AI artifact was not found for this recording.');
+    }
+
+    const write = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM ai_artifact WHERE id = ? AND recording_id = ?').run(artifactId, recordingId);
+      this.refreshSearchIndex(recordingId);
+    });
+
+    write();
+    const updated = this.getRecording(recordingId);
+    if (!updated) {
+      throw new Error('Recording disappeared after AI artifact delete.');
+    }
+    return updated;
+  }
+
   ensureBuiltInTemplates(templates: Array<{ id: string; name: string; description: string; promptVersion: string; prompt: string; outputSchema: string }>): void {
     const now = new Date().toISOString();
     const upsert = this.db.prepare(

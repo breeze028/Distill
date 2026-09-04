@@ -16,6 +16,11 @@ export const editTranscriptSegmentRequestSchema = z.object({
   text: z.string().trim().min(1)
 });
 
+export const deleteAIArtifactRequestSchema = z.object({
+  recordingId: z.string().min(1),
+  artifactId: z.string().min(1)
+});
+
 export const saveSettingsRequestSchema = z.object({
   aiProvider: z.string().min(1).optional(),
   deepSeekApiKey: z.string().optional(),
@@ -29,3 +34,4 @@ export const saveSettingsRequestSchema = z.object({
 export type SaveSettingsRequest = z.infer<typeof saveSettingsRequestSchema>;
 export type GenerateAIArtifactRequest = z.infer<typeof generateAIArtifactRequestSchema>;
 export type EditTranscriptSegmentRequest = z.infer<typeof editTranscriptSegmentRequestSchema>;
+export type DeleteAIArtifactRequest = z.infer<typeof deleteAIArtifactRequestSchema>;

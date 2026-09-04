@@ -1,5 +1,5 @@
 import type { AIArtifactTemplate, AppSettings, ImportRecordingResult, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
-import type { EditTranscriptSegmentRequest, SaveSettingsRequest } from './schemas/ipc';
+import type { DeleteAIArtifactRequest, EditTranscriptSegmentRequest, SaveSettingsRequest } from './schemas/ipc';
 
 export const ipcChannels = {
   recordingsList: 'recordings:list',
@@ -10,6 +10,7 @@ export const ipcChannels = {
   recordingsTranscribe: 'recordings:transcribe',
   recordingsEditTranscriptSegment: 'recordings:edit-transcript-segment',
   recordingsStartAIGeneration: 'recordings:start-ai-generation',
+  recordingsDeleteAIArtifact: 'recordings:delete-ai-artifact',
   aiTemplatesList: 'ai-templates:list',
   recordingsSearch: 'recordings:search',
   libraryChanged: 'library:changed',
@@ -29,6 +30,7 @@ export type DistillApi = {
   transcribeRecording(id: string): Promise<RecordingDetail>;
   editTranscriptSegment(input: EditTranscriptSegmentRequest): Promise<RecordingDetail>;
   startAIGeneration(recordingId: string, templateId?: string): Promise<RecordingDetail>;
+  deleteAIArtifact(input: DeleteAIArtifactRequest): Promise<RecordingDetail>;
   listAITemplates(): Promise<AIArtifactTemplate[]>;
   searchRecordings(query: string): Promise<RecordingListItem[]>;
   onLibraryChanged(callback: () => void): () => void;

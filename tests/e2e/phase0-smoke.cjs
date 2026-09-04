@@ -39,6 +39,8 @@ async function main() {
   let aiGenerationProgressVisible = false;
   let aiArtifactHistoryPersisted = false;
   let aiArtifactHistoryVisible = false;
+  let aiArtifactDeleteMenuVisible = false;
+  let aiArtifactDeleted = false;
   let watchFolderRunning = false;
   let watchFolderImported = false;
   let watchFolderAutoTranscribed = false;
@@ -161,6 +163,14 @@ async function main() {
     aiArtifactHistoryPersisted = detailAfterSecondGenerate.artifacts.length >= 2 &&
       detailAfterSecondGenerate.latestArtifact?.templateId === 'personal-reflection' &&
       detailAfterSecondGenerate.artifacts.some((artifact) => artifact.templateId === 'technical-thinking');
+    await win.getByTestId('ai-artifact-history').getByText('技术思考').click({ button: 'right' });
+    await win.getByTestId('ai-artifact-context-menu').getByRole('button', { name: 'Delete' }).waitFor();
+    aiArtifactDeleteMenuVisible = true;
+    await win.getByTestId('ai-artifact-context-menu').getByRole('button', { name: 'Delete' }).click();
+    const detailAfterArtifactDelete = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
+    aiArtifactDeleted =
+      detailAfterArtifactDelete.latestArtifact?.templateId === 'personal-reflection' &&
+      !detailAfterArtifactDelete.artifacts.some((artifact) => artifact.templateId === 'technical-thinking');
 
     const detailBeforeRetranscribe = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
     const previousJobId = detailBeforeRetranscribe.jobs.find((job) => job.kind === 'transcription')?.id;
@@ -233,6 +243,8 @@ async function main() {
         aiGenerationProgressVisible,
         aiArtifactHistoryPersisted,
         aiArtifactHistoryVisible,
+        aiArtifactDeleteMenuVisible,
+        aiArtifactDeleted,
         watchFolderRunning,
         watchFolderImported,
         watchFolderAutoTranscribed,
@@ -305,6 +317,12 @@ async function main() {
   }
   if (!aiArtifactHistoryVisible) {
     throw new Error('Expected AI artifact history to be visible.');
+  }
+  if (!aiArtifactDeleteMenuVisible) {
+    throw new Error('Expected AI artifact history context menu to show Delete.');
+  }
+  if (!aiArtifactDeleted) {
+    throw new Error('Expected AI artifact history Delete action to remove the selected artifact.');
   }
   if (!watchFolderRunning) {
     throw new Error('Expected watch folder to be running after saving settings.');

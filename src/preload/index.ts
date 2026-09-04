@@ -11,6 +11,7 @@ const api: DistillApi = {
   transcribeRecording: (id) => ipcRenderer.invoke(ipcChannels.recordingsTranscribe, id),
   editTranscriptSegment: (input) => ipcRenderer.invoke(ipcChannels.recordingsEditTranscriptSegment, input),
   startAIGeneration: (recordingId, templateId = 'default-summary') => ipcRenderer.invoke(ipcChannels.recordingsStartAIGeneration, { recordingId, templateId }),
+  deleteAIArtifact: (input) => ipcRenderer.invoke(ipcChannels.recordingsDeleteAIArtifact, input),
   listAITemplates: () => ipcRenderer.invoke(ipcChannels.aiTemplatesList),
   searchRecordings: (query) => ipcRenderer.invoke(ipcChannels.recordingsSearch, query),
   onLibraryChanged: (callback) => {

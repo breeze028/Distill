@@ -26,6 +26,7 @@ type LibraryState = {
   transcribeRecording(id: string): Promise<void>;
   editTranscriptSegment(recordingId: string, transcriptId: string, segmentId: string, text: string): Promise<void>;
   generateArtifact(id: string, templateId?: string): Promise<void>;
+  deleteAIArtifact(recordingId: string, artifactId: string): Promise<void>;
   search(query: string): Promise<void>;
   showLibrary(): void;
   showInbox(): Promise<void>;
@@ -206,6 +207,18 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         const { [id]: _finished, ...remaining } = state.generatingArtifactIds;
         return { generatingArtifactIds: remaining };
       });
+    }
+  },
+
+  async deleteAIArtifact(recordingId, artifactId) {
+    set({ error: null, viewMode: 'library' });
+    try {
+      const recording = await window.distillAPI.deleteAIArtifact({ recordingId, artifactId });
+      const recordings = await window.distillAPI.listRecordings();
+      set({ recordings, selectedRecording: recording });
+    } catch (error) {
+      set({ error: toMessage(error) });
+      throw error;
     }
   },
 

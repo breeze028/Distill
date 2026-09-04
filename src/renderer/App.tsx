@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent, MouseEvent } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, FileAudio, FolderOpen, Import, Library, Pencil, RefreshCw, Save, Search, Settings, Upload, X, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, FileAudio, FolderOpen, Import, Library, Pencil, RefreshCw, Save, Search, Settings, Trash2, Upload, X, XCircle } from 'lucide-react';
 import type { AIArtifact, AIArtifactTemplate, ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
@@ -30,6 +30,7 @@ export function App() {
     transcribeRecording,
     editTranscriptSegment,
     generateArtifact,
+    deleteAIArtifact,
     search,
     showLibrary,
     showInbox,
@@ -139,6 +140,7 @@ export function App() {
             onTranscribe={(id) => void transcribeRecording(id)}
             onEditTranscriptSegment={(recordingId, transcriptId, segmentId, text) => editTranscriptSegment(recordingId, transcriptId, segmentId, text)}
             onGenerateArtifact={(id, templateId) => void generateArtifact(id, templateId)}
+            onDeleteAIArtifact={(recordingId, artifactId) => deleteAIArtifact(recordingId, artifactId)}
           />
         )}
       </main>
@@ -349,6 +351,7 @@ function RecordingDetailPane(props: {
   onTranscribe(id: string): void;
   onEditTranscriptSegment(recordingId: string, transcriptId: string, segmentId: string, text: string): Promise<void>;
   onGenerateArtifact(id: string, templateId: string): void;
+  onDeleteAIArtifact(recordingId: string, artifactId: string): Promise<void>;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -502,6 +505,7 @@ function RecordingDetailPane(props: {
                 selectedId={displayedArtifact.id}
                 templates={props.aiTemplates}
                 onSelect={setSelectedArtifactId}
+                onDelete={(artifactId) => props.onDeleteAIArtifact(recording.id, artifactId)}
               />
             </div>
           ) : (
@@ -1064,9 +1068,51 @@ function AIArtifactHistory(props: {
   selectedId: string;
   templates: AIArtifactTemplate[];
   onSelect(id: string): void;
+  onDelete(id: string): Promise<void>;
 }) {
+  const [menu, setMenu] = useState<{ artifactId: string; x: number; y: number } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!menu) {
+      return undefined;
+    }
+
+    function closeMenu() {
+      setMenu(null);
+    }
+
+    function closeMenuOnEscape(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMenu(null);
+      }
+    }
+
+    window.addEventListener('click', closeMenu);
+    window.addEventListener('keydown', closeMenuOnEscape);
+    return () => {
+      window.removeEventListener('click', closeMenu);
+      window.removeEventListener('keydown', closeMenuOnEscape);
+    };
+  }, [menu]);
+
   if (props.artifacts.length <= 1) {
     return null;
+  }
+
+  async function deleteSelectedArtifact() {
+    if (!menu) {
+      return;
+    }
+
+    const artifactId = menu.artifactId;
+    setDeletingId(artifactId);
+    setMenu(null);
+    try {
+      await props.onDelete(artifactId);
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -1085,6 +1131,11 @@ function AIArtifactHistory(props: {
               )}
               aria-pressed={selected}
               onClick={() => props.onSelect(artifact.id)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setMenu({ artifactId: artifact.id, x: event.clientX, y: event.clientY });
+              }}
+              disabled={deletingId === artifact.id}
             >
               <span className="min-w-0">
                 <span className="block truncate font-medium text-foreground">{artifact.content.title}</span>
@@ -1095,6 +1146,23 @@ function AIArtifactHistory(props: {
           );
         })}
       </div>
+      {menu ? (
+        <div
+          data-testid="ai-artifact-context-menu"
+          className="fixed z-50 min-w-36 rounded border border-border bg-background p-1 text-sm shadow"
+          style={{ left: menu.x, top: menu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            onClick={() => void deleteSelectedArtifact()}
+            disabled={deletingId === menu.artifactId}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

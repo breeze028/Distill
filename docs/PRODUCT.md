@@ -22,6 +22,7 @@ M4A
 - 资料库：录音列表、状态、日期、时长、导入操作、空状态。
 - 录音详情：音频播放器、summary 区域、transcript 区域。
 - Transcript 阅读器支持按 segment 人工修正文本，原始机器转写版本仍保留。
+- AI 笔记 History 可切换历史版本，并可右键删除不需要的生成结果。
 - 设置：STT model、DeepSeek provider 设置、watch folder 占位。
 
 ## 暂不实现
