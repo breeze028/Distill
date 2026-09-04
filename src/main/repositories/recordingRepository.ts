@@ -177,11 +177,12 @@ export class RecordingRepository {
     if (!row) {
       return null;
     }
+    const latestArtifact = this.getLatestArtifact(id);
 
     return {
-      ...this.toListItem(row),
+      ...this.toListItem(row, latestArtifact),
       transcript: this.getLatestTranscript(id),
-      latestArtifact: this.getLatestArtifact(id),
+      latestArtifact,
       artifacts: this.listArtifacts(id),
       jobs: this.listProcessingJobs(id)
     };
@@ -479,10 +480,10 @@ export class RecordingRepository {
     this.refreshSearchIndex(recordingId);
   }
 
-  private toListItem(row: RecordingRow): RecordingListItem {
+  private toListItem(row: RecordingRow, latestArtifact = this.getLatestArtifact(row.id)): RecordingListItem {
     return {
       id: row.id,
-      title: row.title,
+      title: latestArtifact?.content.title ?? row.title,
       originalFileName: row.original_file_name,
       filePath: row.file_path,
       fileSize: row.file_size,
@@ -586,10 +587,11 @@ export class RecordingRepository {
     if (!row) {
       return null;
     }
+    const latestArtifact = this.getLatestArtifact(id);
     return {
-      ...this.toListItem(row),
+      ...this.toListItem(row, latestArtifact),
       transcript: this.getLatestTranscript(id),
-      latestArtifact: this.getLatestArtifact(id),
+      latestArtifact,
       artifacts: this.listArtifacts(id),
       jobs: this.listProcessingJobs(id)
     };

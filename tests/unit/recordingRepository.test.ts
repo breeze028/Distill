@@ -149,6 +149,30 @@ describe('RecordingRepository', () => {
     expect(days).toContainEqual({ date: today, recordingCount: 1, totalDuration: 5 });
     expect(recordings.map((item) => item.id)).toEqual([recording.id]);
   });
+
+  it('uses the latest AI artifact title when listing recordings', () => {
+    const repository = new RecordingRepository(dbManager.open());
+    repository.ensureBuiltInTemplates([
+      testTemplate('default-summary'),
+      testTemplate('technical-thinking')
+    ]);
+    const recording = repository.createRecording(newRecording('original-file-title.m4a', {
+      createdAt: new Date(2026, 8, 4, 10, 0).toISOString()
+    }));
+
+    const firstArtifact = repository.addAIArtifact(aiArtifact(recording.id, 'default-summary', '第一版 AI 标题'));
+    const secondArtifact = repository.addAIArtifact(aiArtifact(recording.id, 'technical-thinking', '第二版 AI 标题'));
+
+    expect(repository.getRecording(recording.id)?.title).toBe('第二版 AI 标题');
+    expect(repository.listRecordings()[0]?.title).toBe('第二版 AI 标题');
+    expect(repository.listRecordingsByDate('2026-09-04')[0]?.title).toBe('第二版 AI 标题');
+
+    repository.deleteAIArtifact(recording.id, secondArtifact.id);
+    expect(repository.listRecordings()[0]?.title).toBe('第一版 AI 标题');
+
+    repository.deleteAIArtifact(recording.id, firstArtifact.id);
+    expect(repository.listRecordings()[0]?.title).toBe('original-file-title');
+  });
 });
 
 function newRecording(fileName: string, overrides: Partial<NewRecording> = {}): NewRecording {
@@ -171,6 +195,35 @@ function baseRecording(fileName: string): NewRecording {
     format: path.extname(fileName).slice(1),
     duration: 3,
     createdAt: null
+  };
+}
+
+function aiArtifact(recordingId: string, templateId: string, title: string) {
+  return {
+    recordingId,
+    templateId,
+    provider: 'mock',
+    model: 'mock',
+    promptVersion: 'test',
+    rawResponse: null,
+    content: {
+      title,
+      summary: '测试摘要。',
+      keyPoints: [],
+      todos: [],
+      tags: []
+    }
+  };
+}
+
+function testTemplate(id: string) {
+  return {
+    id,
+    name: id,
+    description: id,
+    promptVersion: 'test',
+    prompt: 'test',
+    outputSchema: '{}'
   };
 }
 

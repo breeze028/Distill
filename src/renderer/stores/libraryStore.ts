@@ -210,7 +210,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     try {
       const recording = await window.distillAPI.startAIGeneration(id, templateId);
       const recordings = await window.distillAPI.listRecordings();
-      set({ recordings, selectedRecording: recording });
+      const calendarRecordings = await loadSelectedCalendarRecordings(get());
+      set({ recordings, selectedRecording: recording, calendarRecordings });
       void get().pollRecordingUntilIdle(id, 'ai');
     } catch (error) {
       const recording = await window.distillAPI.getRecording(id).catch(() => null);
@@ -229,7 +230,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     try {
       const recording = await window.distillAPI.deleteAIArtifact({ recordingId, artifactId });
       const recordings = await window.distillAPI.listRecordings();
-      set({ recordings, selectedRecording: recording });
+      const calendarRecordings = await loadSelectedCalendarRecordings(get());
+      set({ recordings, selectedRecording: recording, calendarRecordings });
     } catch (error) {
       set({ error: toMessage(error) });
       throw error;
@@ -368,8 +370,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           window.distillAPI.getRecording(id),
           window.distillAPI.listRecordings()
         ]);
+        const calendarRecordings = await loadSelectedCalendarRecordings(get());
         set({
           recordings,
+          calendarRecordings,
           selectedRecording: get().selectedRecording?.id === id ? recording : get().selectedRecording
         });
 
@@ -411,6 +415,13 @@ function setRunningState(state: LibraryState, kind: ProcessingJobKind, id: strin
     };
   }
   return {};
+}
+
+async function loadSelectedCalendarRecordings(state: LibraryState): Promise<RecordingListItem[]> {
+  if (state.viewMode !== 'calendar' || !state.selectedCalendarDate) {
+    return state.calendarRecordings;
+  }
+  return window.distillAPI.listRecordingsByDate({ date: state.selectedCalendarDate });
 }
 
 function delay(ms: number): Promise<void> {
