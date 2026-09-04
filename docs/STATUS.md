@@ -70,6 +70,7 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - Python STT 未显式配置命令时，会优先发现源码目录下的 `python\.venv\Scripts\python.exe`；从 `out\distill-win32-x64\distill.exe` 手动启动打包应用时也会回溯到项目 venv。
 - Recording Detail 会识别旧 mock/占位 transcript，并提示使用 Python Worker 重新转写。
 - Recording Detail 在转写运行中会显示已耗时，并提示首次模型下载/加载可能导致等待变长。
+- Python STT 转写超时默认 30 分钟，可用 `DISTILL_STT_TIMEOUT_MS` 调整；超时后 Windows 会尝试结束 worker 进程树，并提示 medium/small 在 CPU 与首次下载场景下可能很慢。
 - 手动 Retranscribe 会先创建新的后台 `ProcessingJob` 并立即刷新 UI，处理耗时从本次任务开始计算。
 - 新增 `AIArtifactService`，可基于已有 Transcript 和内置模板生成结构化 AI 笔记。
 - 新增 `recordings:start-ai-generation` IPC，Renderer 可触发后台 AI 生成任务。
@@ -150,7 +151,7 @@ pnpm dev
 ## 当前已知限制
 
 - 首次真实 faster-whisper 转写需要用户本机安装 Python 依赖并下载模型。
-- `small`/`medium` 模型在 CPU 上可能明显慢于 `tiny`，短录音默认建议使用 `tiny`。
+- `small`/`medium` 模型在 CPU 上可能明显慢于 `tiny`/`base`；`medium` 首次下载或纯 CPU 转写时可能进入很长等待，短录音默认建议使用 `tiny` 或 `base`。
 - 旧版本已经生成的 mock/占位 transcript 不会被自动删除，需要用户点击 Retranscribe 生成真实内容。
 - DeepSeek provider 已接入生成主干并有 mock fetch 单测；真实 API smoke 仍需要通过本地密钥配置单独验证。
 - Watch Folder 已有本地监听、自动导入和导入后 Library 刷新第一版；尚未实现系统通知、队列视图和文件稳定性高级策略。

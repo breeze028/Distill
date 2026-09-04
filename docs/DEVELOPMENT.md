@@ -47,6 +47,7 @@ pnpm smoke:stt
 - `DISTILL_WHISPER_MODEL`：默认 `tiny`，也接受 UI 设置中的 `faster-whisper-tiny` 形式。
 - `DISTILL_WHISPER_DEVICE`：默认 `auto`。
 - `DISTILL_WHISPER_COMPUTE_TYPE`：默认 `int8`。
+- `DISTILL_STT_TIMEOUT_MS`：Python Worker 单次转写超时，默认 30 分钟；调试卡住的模型下载或本地 CPU 转写时可临时调短。
 
 自动化测试不会调用真实 faster-whisper，也不会下载模型。
 

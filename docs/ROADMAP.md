@@ -76,6 +76,7 @@
 - 已给 transcript 增加来源元数据，并在 UI 中提示旧 mock/占位 transcript 需要重新转写。
 - 已将默认模型改为 `faster-whisper-tiny`，并在 Settings 提供常用模型选择。
 - 已在转写运行中显示耗时提示，减少短音频等待时的不确定感。
+- 已补充 Python Worker 转写超时诊断；超时后会结束 worker 进程树，并提示 small/medium 在 CPU 或首次模型下载时可能非常慢。
 - 已将手动 Retranscribe 改为后台任务启动，UI 立即显示新任务耗时。
 - 已强化 transcript segment 点击回听，通过 media fragment 重载播放器源，并等待 metadata、seek 和可播放数据就绪后再播放，避免从头播放。
 - 已为本地音频协议增加 byte range 响应，保证 M4A/MP3/WAV seek 后能从目标时间继续读取音频数据。

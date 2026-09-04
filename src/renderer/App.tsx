@@ -589,9 +589,7 @@ function TranscriptionProgressNotice(props: { job: ProcessingJob }) {
 
   const startedAt = props.job.startedAt ?? props.job.createdAt;
   const elapsedSeconds = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
-  const message = elapsedSeconds >= 60
-    ? '仍在运行。首次使用某个 Whisper 模型时，可能正在下载或加载模型。'
-    : '正在转写。短音频通常会在几十秒内完成；首次运行可能更久。';
+  const message = transcriptionProgressMessage(elapsedSeconds);
 
   return (
     <div className="mt-4 flex items-start gap-2 rounded border border-border bg-background px-3 py-3 text-sm">
@@ -602,6 +600,22 @@ function TranscriptionProgressNotice(props: { job: ProcessingJob }) {
       </div>
     </div>
   );
+}
+
+function transcriptionProgressMessage(elapsedSeconds: number): string {
+  if (elapsedSeconds >= 15 * 60) {
+    return '仍在运行超过 15 分钟。medium 在 CPU 上可能非常慢，建议切回 tiny/base 验证流程，或等待首次模型下载完成后重试。';
+  }
+
+  if (elapsedSeconds >= 5 * 60) {
+    return '仍在运行。small/medium 首次使用可能正在下载较大的模型；CPU 转写会明显慢于 tiny/base。';
+  }
+
+  if (elapsedSeconds >= 60) {
+    return '仍在运行。首次使用某个 Whisper 模型时，可能正在下载或加载模型；更大的模型会更慢。';
+  }
+
+  return '正在转写。短音频通常会在几十秒内完成；首次运行可能更久。';
 }
 
 function AIProgressNotice(props: { job: ProcessingJob }) {
@@ -822,9 +836,9 @@ function SettingsPane(props: {
             <option value="faster-whisper-tiny">tiny · fastest</option>
             <option value="faster-whisper-base">base · light</option>
             <option value="faster-whisper-small">small · more accurate</option>
-            <option value="faster-whisper-medium">medium · slower</option>
+            <option value="faster-whisper-medium">medium · slow on CPU</option>
           </select>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">首次使用某个模型会下载/加载模型文件；短音频建议先用 tiny。</p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">首次使用某个模型会下载/加载模型文件；短音频建议先用 tiny/base，medium 在 CPU 上可能非常慢。</p>
         </Field>
         <label className="flex items-center gap-3 text-sm">
           <input

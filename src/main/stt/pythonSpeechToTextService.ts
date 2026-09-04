@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
@@ -55,7 +55,7 @@ export class PythonSpeechToTextService implements SpeechToTextService {
     this.modelName = options.modelName ?? process.env.DISTILL_WHISPER_MODEL ?? 'tiny';
     this.device = options.device ?? process.env.DISTILL_WHISPER_DEVICE ?? 'auto';
     this.computeType = options.computeType ?? process.env.DISTILL_WHISPER_COMPUTE_TYPE ?? 'int8';
-    this.timeoutMs = options.timeoutMs ?? 30 * 60 * 1000;
+    this.timeoutMs = options.timeoutMs ?? readPositiveIntegerEnv('DISTILL_STT_TIMEOUT_MS') ?? 30 * 60 * 1000;
     this.diagnosisTimeoutMs = options.diagnosisTimeoutMs ?? 10 * 1000;
   }
 
@@ -138,7 +138,7 @@ export class PythonSpeechToTextService implements SpeechToTextService {
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      killProcessTree(child.pid);
     }, timeoutMs);
 
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
@@ -156,7 +156,7 @@ export class PythonSpeechToTextService implements SpeechToTextService {
     clearTimeout(timeout);
 
     if (timedOut) {
-      throw new Error(`Python STT worker timed out after ${timeoutMs}ms.`);
+      throw new Error(formatWorkerTimeout(timeoutMs, request));
     }
 
     if (spawnErrorMessage) {
@@ -218,6 +218,48 @@ function possibleSourceRoots(): string[] {
 
 function normalizeModelName(modelName: string): string {
   return modelName.replace(/^faster-whisper-/, '');
+}
+
+function readPositiveIntegerEnv(key: string): number | undefined {
+  const value = Number(process.env[key]);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function killProcessTree(pid: number | undefined): void {
+  if (!pid) {
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true }, () => undefined);
+    return;
+  }
+
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    // The worker may have exited between timeout scheduling and cleanup.
+  }
+}
+
+function formatWorkerTimeout(timeoutMs: number, request: WorkerRequest): string {
+  const model = typeof request.model === 'string' ? normalizeModelName(request.model) : 'unknown';
+  const timeout = formatDurationForError(timeoutMs);
+  return [
+    `Python STT worker timed out after ${timeout}.`,
+    `Model: ${model}.`,
+    '如果当前使用 small/medium，CPU 转写和首次模型下载可能非常慢；建议先切回 tiny 或 base 验证流程，再重试更大模型。'
+  ].join(' ');
+}
+
+function formatDurationForError(ms: number): string {
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+  return rest === 0 ? `${minutes}min` : `${minutes}min ${rest}s`;
 }
 
 function formatWorkerError(stderr: string, exitCode: number | null): string {

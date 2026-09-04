@@ -8,10 +8,12 @@ import { PythonSpeechToTextService } from '@main/stt/pythonSpeechToTextService';
 let tmpDir = '';
 const originalCwd = process.cwd();
 const originalPythonCommand = process.env.DISTILL_PYTHON_COMMAND;
+const originalSttTimeout = process.env.DISTILL_STT_TIMEOUT_MS;
 const originalResourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
 
 beforeEach(() => {
   Reflect.deleteProperty(process.env, 'DISTILL_PYTHON_COMMAND');
+  Reflect.deleteProperty(process.env, 'DISTILL_STT_TIMEOUT_MS');
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'distill-python-stt-'));
 });
 
@@ -21,6 +23,11 @@ afterEach(() => {
     Reflect.deleteProperty(process.env, 'DISTILL_PYTHON_COMMAND');
   } else {
     process.env.DISTILL_PYTHON_COMMAND = originalPythonCommand;
+  }
+  if (originalSttTimeout === undefined) {
+    Reflect.deleteProperty(process.env, 'DISTILL_STT_TIMEOUT_MS');
+  } else {
+    process.env.DISTILL_STT_TIMEOUT_MS = originalSttTimeout;
   }
   if (originalResourcesPath) {
     Object.defineProperty(process, 'resourcesPath', originalResourcesPath);
@@ -80,6 +87,22 @@ describe('PythonSpeechToTextService', () => {
     });
 
     await expect(service.transcribe(path.join(tmpDir, 'audio.m4a'))).rejects.toThrow('invalid JSON');
+  });
+
+  it('uses the configured timeout and explains slow local models', async () => {
+    process.env.DISTILL_STT_TIMEOUT_MS = '120';
+    const workerPath = writeWorker('setTimeout(() => undefined, 5000);');
+    const service = new PythonSpeechToTextService({
+      pythonCommand: process.execPath,
+      workerPath,
+      modelName: 'faster-whisper-medium'
+    });
+
+    const transcription = service.transcribe(path.join(tmpDir, 'audio.m4a'));
+
+    await expect(transcription).rejects.toThrow('timed out after 1s');
+    await expect(transcription).rejects.toThrow('Model: medium');
+    await expect(transcription).rejects.toThrow('CPU 转写和首次模型下载可能非常慢');
   });
 
   it('checks worker readiness without transcribing audio', async () => {
