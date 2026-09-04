@@ -114,6 +114,10 @@ async function main() {
     await win.getByText('整理自 personal-reflection 模板的模拟 AI 笔记。').waitFor();
     await win.getByTestId('ai-artifact-history').getByText('技术思考').waitFor();
     await win.getByTestId('ai-artifact-history').getByText('个人随想').waitFor();
+    await win.getByTestId('ai-artifact-history').getByText('技术思考').click();
+    await win.getByText('整理自 technical-thinking 模板的模拟 AI 笔记。').waitFor();
+    await win.getByTestId('ai-artifact-history').getByText('个人随想').click();
+    await win.getByText('整理自 personal-reflection 模板的模拟 AI 笔记。').waitFor();
     aiArtifactHistoryVisible = true;
     const detailAfterSecondGenerate = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
     aiArtifactHistoryPersisted = detailAfterSecondGenerate.artifacts.length >= 2 &&

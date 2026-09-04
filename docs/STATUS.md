@@ -131,7 +131,7 @@ pnpm dev
 - 点击 Generate Notes 会立即显示 AI 生成任务耗时
 - mock LLM 生成的 `AIArtifact` 可在详情页 Summary 区展示并持久化
 - 选择 `technical-thinking` 模板后生成 AI 笔记，mock 摘要确认使用对应 template id
-- 连续两次生成 AI 笔记后，详情页展示 artifact history，数据库保留两条历史并以最新版本作为默认展示
+- 连续两次生成 AI 笔记后，详情页展示 artifact history，数据库保留两条历史并以最新版本作为默认展示；点击旧版本可切换正文
 - AI 生成任务成功/失败会写入 `ProcessingJob`
 - DeepSeek provider 错误分类、raw response 保留和失败诊断详情展示
 - LLM provider 选择默认使用 DeepSeek，mock LLM 只在显式测试/开发环境启用

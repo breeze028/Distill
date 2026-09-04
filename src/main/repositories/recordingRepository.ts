@@ -417,7 +417,7 @@ export class RecordingRepository {
 
   private listArtifacts(recordingId: string): AIArtifact[] {
     const rows = this.db
-      .prepare('SELECT * FROM ai_artifact WHERE recording_id = ? ORDER BY created_at DESC')
+      .prepare('SELECT * FROM ai_artifact WHERE recording_id = ? ORDER BY created_at DESC, rowid DESC')
       .all(recordingId) as ArtifactRow[];
 
     return rows.map((row) => ({
