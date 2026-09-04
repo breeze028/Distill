@@ -115,4 +115,11 @@ export type SpeechToTextStatus = {
   setupHint: string | null;
 };
 
+export type WatchFolderStatus = {
+  folderPath: string;
+  running: boolean;
+  errorMessage: string | null;
+  lastEventAt: string | null;
+};
+
 export type ImportableAudioFormat = 'm4a' | 'mp3' | 'wav';

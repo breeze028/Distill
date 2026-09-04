@@ -158,6 +158,19 @@
 - 同一文件不会重复导入
 - 文件移动、删除、复制中断时错误可见但不破坏数据库
 
+当前已完成：
+
+- Settings 中的 Watch Folder 会驱动 Main 侧 `WatchFolderService` 刷新监听。
+- `WatchFolderService` 使用本地文件系统监听 M4A/MP3/WAV，并在文件稳定后调用现有 importer。
+- Watch Folder 导入会复用现有去重逻辑，并按 `autoTranscribeOnImport` 触发自动转写。
+- Inbox 页面显示 Watch Folder 状态、最近事件和错误信息。
+
+下一步：
+
+- 增加导入队列视图，让用户看到 Watch Folder 最近导入了哪些文件。
+- 增加导入完成后的 Renderer 实时刷新或轻量通知。
+- 增加更完整的文件稳定性策略，处理大文件复制、iCloud 同步和临时文件。
+
 ## Phase 5：稳定性、打包与数据安全
 
 目标：把原型提升到长期可用的本地桌面应用。

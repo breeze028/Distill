@@ -8,11 +8,14 @@ async function main() {
   const audio = path.join(root, 'test-fixtures', 'phase1-transcript-long-中文-test.m4a');
   const db = path.join(root, 'test-results', 'phase0-ui.db');
   const exe = path.join(root, 'out', 'distill-win32-x64', 'distill.exe');
+  const watchDir = path.join(root, 'test-results', 'watch-folder');
 
   for (const suffix of ['', '-wal', '-shm']) {
     fs.rmSync(`${db}${suffix}`, { force: true });
   }
+  fs.rmSync(watchDir, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(db), { recursive: true });
+  fs.mkdirSync(watchDir, { recursive: true });
   ensureAudioFixture(audio, 75);
 
   const app = await launchApp(exe, db);
@@ -36,6 +39,9 @@ async function main() {
   let aiGenerationProgressVisible = false;
   let aiArtifactHistoryPersisted = false;
   let aiArtifactHistoryVisible = false;
+  let watchFolderRunning = false;
+  let watchFolderImported = false;
+  let watchFolderAutoTranscribed = false;
 
   try {
     const win = await app.firstWindow();
@@ -63,6 +69,20 @@ async function main() {
     await win.getByText('Watch Folder', { exact: true }).waitFor();
     await win.getByRole('button', { name: 'Inbox' }).click();
     await win.getByText('phase1-transcript-long-中文-test').first().waitFor();
+    await win.evaluate((folder) => window.distillAPI.saveSettings({ watchFolder: folder }), watchDir);
+    const watchStatus = await waitForWatchFolderStatus(win, 5000);
+    watchFolderRunning = watchStatus.running;
+    await win.getByRole('button', { name: 'Inbox' }).click();
+    await win.getByText('监听中').waitFor();
+    await win.getByRole('button', { name: 'Inbox' }).click();
+    fs.copyFileSync(audio, path.join(watchDir, 'watch-folder-auto.m4a'));
+    const watchedRecordings = await waitForRecordingCount(win, 2, 30000);
+    const watchedRecording = watchedRecordings.find((recording) => recording.title === 'watch-folder-auto');
+    watchFolderImported = Boolean(watchedRecording);
+    if (watchedRecording) {
+      const watchedDetail = await waitForTranscript(win, watchedRecording.id, 30000);
+      watchFolderAutoTranscribed = Boolean(watchedDetail.transcript?.segments.length);
+    }
     rangedFetchStatus = await win.evaluate(async (recordingId) => {
       const response = await fetch(`distill-audio://recording/${recordingId}`, {
         headers: { Range: 'bytes=0-1' }
@@ -195,6 +215,9 @@ async function main() {
         aiGenerationProgressVisible,
         aiArtifactHistoryPersisted,
         aiArtifactHistoryVisible,
+        watchFolderRunning,
+        watchFolderImported,
+        watchFolderAutoTranscribed,
         hasLibraryText: text.includes('Voice Library'),
         hasDetailText: text.includes('phase1-transcript-long-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
@@ -211,8 +234,8 @@ async function main() {
   if (imported.wasDuplicate) {
     throw new Error('Expected first import not to be a duplicate.');
   }
-  if (persisted.length !== 1) {
-    throw new Error(`Expected one persisted recording, got ${persisted.length}.`);
+  if (persisted.length < 2) {
+    throw new Error(`Expected at least two persisted recordings after watch folder import, got ${persisted.length}.`);
   }
   if (audioElementCount !== 1) {
     throw new Error(`Expected one audio element, got ${audioElementCount}.`);
@@ -255,6 +278,15 @@ async function main() {
   }
   if (!aiArtifactHistoryVisible) {
     throw new Error('Expected AI artifact history to be visible.');
+  }
+  if (!watchFolderRunning) {
+    throw new Error('Expected watch folder to be running after saving settings.');
+  }
+  if (!watchFolderImported) {
+    throw new Error('Expected watch folder to import a new audio file.');
+  }
+  if (!watchFolderAutoTranscribed) {
+    throw new Error('Expected watch folder import to start automatic transcription.');
   }
   if (!appMenuRemoved) {
     throw new Error('Expected Electron application menu to be removed.');
@@ -311,6 +343,18 @@ async function waitForRecordingCount(win, count, timeoutMs) {
   }
   const recordings = await win.evaluate(() => window.distillAPI.listRecordings());
   throw new Error(`Timed out waiting for ${count} recording(s), got ${recordings.length}.`);
+}
+
+async function waitForWatchFolderStatus(win, timeoutMs) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const status = await win.evaluate(() => window.distillAPI.getWatchFolderStatus());
+    if (status.running || status.errorMessage) {
+      return status;
+    }
+    await win.waitForTimeout(250);
+  }
+  return win.evaluate(() => window.distillAPI.getWatchFolderStatus());
 }
 
 function launchApp(exe, db) {

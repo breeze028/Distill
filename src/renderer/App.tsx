@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock3, FileAudio, FolderOpen, Import, Library, RefreshCw, Search, Settings, Upload, XCircle } from 'lucide-react';
-import type { AIArtifact, AIArtifactTemplate, ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment } from '@shared/types/domain';
+import type { AIArtifact, AIArtifactTemplate, ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { cn } from '@renderer/lib/utils';
@@ -13,6 +13,7 @@ export function App() {
     aiTemplates,
     settings,
     speechToTextStatus,
+    watchFolderStatus,
     query,
     viewMode,
     loading,
@@ -120,7 +121,7 @@ export function App() {
             onRefreshSpeechToText={() => void refreshSpeechToTextStatus()}
           />
         ) : viewMode === 'inbox' ? (
-          <InboxPane settings={settings} onOpenSettings={() => void showSettings()} />
+          <InboxPane settings={settings} watchFolderStatus={watchFolderStatus} onOpenSettings={() => void showSettings()} />
         ) : (
           <RecordingDetailPane
             recording={selectedRecording}
@@ -208,8 +209,13 @@ function Sidebar(props: {
   );
 }
 
-function InboxPane(props: { settings: ReturnType<typeof useLibraryStore.getState>['settings']; onOpenSettings(): void }) {
+function InboxPane(props: {
+  settings: ReturnType<typeof useLibraryStore.getState>['settings'];
+  watchFolderStatus: WatchFolderStatus | null;
+  onOpenSettings(): void;
+}) {
   const watchFolder = props.settings?.watchFolder.trim();
+  const statusText = formatWatchFolderStatus(props.watchFolderStatus);
 
   return (
     <section className="h-full overflow-y-auto px-8 py-6">
@@ -222,6 +228,11 @@ function InboxPane(props: { settings: ReturnType<typeof useLibraryStore.getState
         <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Watch Folder</div>
         <div className="mt-3 rounded border border-border bg-background px-3 py-2 text-sm">
           {watchFolder ? watchFolder : '尚未配置'}
+        </div>
+        <div className="mt-3 grid gap-2 text-sm">
+          <StatusLine label="Status" value={statusText} />
+          {props.watchFolderStatus?.lastEventAt ? <StatusLine label="Last Event" value={formatShortDateTime(props.watchFolderStatus.lastEventAt)} /> : null}
+          {props.watchFolderStatus?.errorMessage ? <p className="text-sm leading-6 text-destructive">{props.watchFolderStatus.errorMessage}</p> : null}
         </div>
         <Button className="mt-4" variant="secondary" onClick={props.onOpenSettings}>
           <Settings className="h-4 w-4" />
@@ -894,6 +905,16 @@ function formatSpeechStatus(status: SpeechToTextStatus | null): string {
     return 'Mock STT ready';
   }
   return status.ready ? 'Python worker ready' : 'Setup required';
+}
+
+function formatWatchFolderStatus(status: WatchFolderStatus | null): string {
+  if (!status || !status.folderPath) {
+    return '未配置';
+  }
+  if (status.errorMessage) {
+    return '需要检查';
+  }
+  return status.running ? '监听中' : '未运行';
 }
 
 function Field(props: { label: string; children: React.ReactNode }) {

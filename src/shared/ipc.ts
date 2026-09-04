@@ -1,4 +1,4 @@
-import type { AIArtifactTemplate, AppSettings, ImportRecordingResult, RecordingDetail, RecordingListItem, SpeechToTextStatus } from './types/domain';
+import type { AIArtifactTemplate, AppSettings, ImportRecordingResult, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
 import type { SaveSettingsRequest } from './schemas/ipc';
 
 export const ipcChannels = {
@@ -13,6 +13,7 @@ export const ipcChannels = {
   recordingsSearch: 'recordings:search',
   settingsGet: 'settings:get',
   settingsSave: 'settings:save',
+  watchFolderStatus: 'watch-folder:status',
   sttStatus: 'stt:status'
 } as const;
 
@@ -29,6 +30,7 @@ export type DistillApi = {
   searchRecordings(query: string): Promise<RecordingListItem[]>;
   getSettings(): Promise<AppSettings>;
   saveSettings(settings: SaveSettingsRequest): Promise<AppSettings>;
+  getWatchFolderStatus(): Promise<WatchFolderStatus>;
   getSpeechToTextStatus(): Promise<SpeechToTextStatus>;
 };
 

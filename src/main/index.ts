@@ -8,6 +8,7 @@ import { RecordingRepository } from '@main/repositories/recordingRepository';
 import { FileImportService } from '@main/services/fileImportService';
 import { TranscriptionService } from '@main/services/transcriptionService';
 import { AIArtifactService } from '@main/services/aiArtifactService';
+import { WatchFolderService } from '@main/services/watchFolderService';
 import { SettingsRepository } from '@main/settings/settingsRepository';
 import { registerIpcHandlers } from '@main/ipc/registerIpc';
 import { builtInTemplates } from '@main/llm/templates';
@@ -29,6 +30,7 @@ if (started) {
 
 let databaseManager: DatabaseManager | null = null;
 let recordings: RecordingRepository | null = null;
+let watchFolderService: WatchFolderService | null = null;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -86,13 +88,15 @@ app.whenReady().then(() => {
     mock: new MockLLMProvider()
   });
   const aiArtifacts = new AIArtifactService(recordings, llm, settings);
+  watchFolderService = new WatchFolderService(settings, importer, transcriber);
 
   const recoveredJobCount = recordings.recoverInterruptedJobs();
   if (recoveredJobCount > 0) {
     logger.warn('ProcessingJob', 'Recovered interrupted jobs on startup', { recoveredJobCount });
   }
   recordings.ensureBuiltInTemplates([...builtInTemplates]);
-  registerIpcHandlers({ recordings, importer, transcriber, aiArtifacts, settings, speechToText });
+  registerIpcHandlers({ recordings, importer, transcriber, aiArtifacts, settings, speechToText, watchFolder: watchFolderService });
+  void watchFolderService.refresh();
   registerAudioProtocol();
   createWindow();
 
@@ -105,6 +109,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    watchFolderService?.stop();
     databaseManager?.close();
     app.quit();
   }

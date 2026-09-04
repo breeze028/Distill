@@ -41,6 +41,8 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - 实现 Inbox 页面占位入口。
 - 移除 Electron 默认原生菜单栏，避免顶部 File/Edit/View 菜单造成焦点问题。
 - 修复 Sidebar navigation：Library、Inbox、Settings 可以切换，Inbox/Settings 再点一次可收回。
+- Watch Folder 已有第一版 Main 侧监听服务：保存文件夹后自动监听 M4A/MP3/WAV，发现新音频后导入，并按设置触发自动转写。
+- Inbox 页面已显示 Watch Folder 路径、监听状态、最近事件时间和错误信息。
 - 新增 `TranscriptionService`。
 - 新增 `recordings:transcribe` IPC。
 - 新增手动触发转写按钮。
@@ -142,6 +144,7 @@ pnpm dev
 - audio element 加载到有效时长
 - Electron application menu 已移除
 - Inbox 和 Settings 可打开/收回
+- 保存 Watch Folder 后状态显示为监听中；复制新 `.m4a` 到监听文件夹会自动导入并触发转写
 
 ## 当前已知限制
 
@@ -149,7 +152,7 @@ pnpm dev
 - `small`/`medium` 模型在 CPU 上可能明显慢于 `tiny`，短录音默认建议使用 `tiny`。
 - 旧版本已经生成的 mock/占位 transcript 不会被自动删除，需要用户点击 Retranscribe 生成真实内容。
 - DeepSeek provider 已接入生成主干并有 mock fetch 单测；真实 API smoke 仍需要通过本地密钥配置单独验证。
-- Watch Folder 只有设置入口和 Inbox 页面占位，尚未实现文件监听。
+- Watch Folder 已有本地监听和自动导入第一版；尚未实现系统通知、队列视图、文件稳定性高级策略和导入完成后的实时 UI 推送。
 - `ProcessingJob` 已覆盖 AI 笔记生成的基础状态流转；更细的 token/费用/模板级重试策略尚未设计。
 - Settings 中 API Key 暂存在 SQLite，未来需要替换为 Windows 安全存储方案。
 - Forge packaging 为了 Phase 0 中诊断 `better-sqlite3` 原生依赖，暂时关闭 `asar`。

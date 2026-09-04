@@ -9,6 +9,7 @@ import type { RecordingRepository } from '@main/repositories/recordingRepository
 import type { SettingsRepository } from '@main/settings/settingsRepository';
 import type { SpeechToTextService } from '@main/stt/types';
 import { listBuiltInTemplateMetadata } from '@main/llm/templates';
+import type { WatchFolderService } from '@main/services/watchFolderService';
 
 export function registerIpcHandlers(dependencies: {
   recordings: RecordingRepository;
@@ -17,6 +18,7 @@ export function registerIpcHandlers(dependencies: {
   aiArtifacts: AIArtifactService;
   settings: SettingsRepository;
   speechToText: SpeechToTextService;
+  watchFolder: WatchFolderService;
 }): void {
   ipcMain.handle(ipcChannels.recordingsList, () => dependencies.recordings.listRecordings());
 
@@ -68,10 +70,14 @@ export function registerIpcHandlers(dependencies: {
 
   ipcMain.handle(ipcChannels.settingsGet, () => dependencies.settings.getSettings());
 
-  ipcMain.handle(ipcChannels.settingsSave, (_event, input: unknown) => {
+  ipcMain.handle(ipcChannels.settingsSave, async (_event, input: unknown) => {
     const parsed = saveSettingsRequestSchema.parse(input);
-    return dependencies.settings.saveSettings(parsed);
+    const saved = dependencies.settings.saveSettings(parsed);
+    await dependencies.watchFolder.refresh();
+    return saved;
   });
+
+  ipcMain.handle(ipcChannels.watchFolderStatus, () => dependencies.watchFolder.getStatus());
 
   ipcMain.handle(ipcChannels.sttStatus, () => dependencies.speechToText.getStatus());
 }
