@@ -780,7 +780,7 @@ function SettingsPane(props: {
   onRefreshSpeechToText(): void;
 }) {
   const [watchFolder, setWatchFolder] = useState(props.settings?.watchFolder ?? '');
-  const [model, setModel] = useState(props.settings?.deepSeekModel ?? 'deepseek-chat');
+  const [model, setModel] = useState(props.settings?.deepSeekModel ?? 'deepseek-v4-flash');
   const [speechProvider, setSpeechProvider] = useState(props.settings?.speechProvider ?? 'python');
   const [speechModel, setSpeechModel] = useState(props.settings?.speechModel ?? 'faster-whisper-tiny');
   const [autoTranscribeOnImport, setAutoTranscribeOnImport] = useState(props.settings?.autoTranscribeOnImport ?? true);
@@ -788,7 +788,7 @@ function SettingsPane(props: {
 
   useEffect(() => {
     setWatchFolder(props.settings?.watchFolder ?? '');
-    setModel(props.settings?.deepSeekModel ?? 'deepseek-chat');
+    setModel(props.settings?.deepSeekModel ?? 'deepseek-v4-flash');
     setSpeechProvider(props.settings?.speechProvider ?? 'python');
     setSpeechModel(props.settings?.speechModel ?? 'faster-whisper-tiny');
     setAutoTranscribeOnImport(props.settings?.autoTranscribeOnImport ?? true);

@@ -109,7 +109,7 @@
 - 已新增 `recordings:start-ai-generation` IPC 和 Summary 区 Generate/Regenerate Notes 入口。
 - 已将 AI 笔记生成接入 `ProcessingJob(kind='ai')`，支持 running、succeeded、failed 基础状态。
 - 已新增 `SelectableLLMProvider` 和 mock LLM，让自动化测试不依赖真实 DeepSeek API。
-- DeepSeek 作为默认真实 provider，当前默认模型继续使用 `deepseek-chat`。
+- DeepSeek 作为默认真实 provider，当前默认模型继续使用 `deepseek-v4-flash`。
 - 已增加 DeepSeek HTTP/响应/JSON schema 错误分类，并在失败 job 中保留 provider raw response。
 - 已在失败提示中以折叠方式展示 job 诊断详情，支持查看 JSON/schema 解析失败时的 raw response。
 - 已增加 Summary 区域模板选择 UI，并通过 Main IPC 只暴露 renderer-safe 的模板元数据。

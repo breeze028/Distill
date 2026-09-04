@@ -73,7 +73,7 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - 手动 Retranscribe 会先创建新的后台 `ProcessingJob` 并立即刷新 UI，处理耗时从本次任务开始计算。
 - 新增 `AIArtifactService`，可基于已有 Transcript 和内置模板生成结构化 AI 笔记。
 - 新增 `recordings:start-ai-generation` IPC，Renderer 可触发后台 AI 生成任务。
-- 新增 `SelectableLLMProvider`，正常默认走 DeepSeek，测试/开发可显式启用 mock LLM。
+- 新增 `SelectableLLMProvider`，正常默认走 DeepSeek，默认模型为 `deepseek-v4-flash`，测试/开发可显式启用 mock LLM。
 - Recording Detail 的 Summary 区域已增加 Generate/Regenerate Notes 入口。
 - Summary 区域已增加 AI 模板选择，下拉只读取 Main 暴露的模板元数据，实际 prompt/schema 不进入 Renderer。
 - AI 笔记生成会创建 `ProcessingJob(kind='ai')`，运行中显示耗时，成功后写入 `AIArtifact`，失败后显示错误、诊断详情并可重试。
@@ -137,7 +137,7 @@ pnpm dev
 - 连续两次生成 AI 笔记后，详情页展示 artifact history，数据库保留两条历史并以最新版本作为默认展示；点击旧版本可切换正文
 - AI 生成任务成功/失败会写入 `ProcessingJob`
 - DeepSeek provider 错误分类、raw response 保留和失败诊断详情展示
-- LLM provider 选择默认使用 DeepSeek，mock LLM 只在显式测试/开发环境启用
+- LLM provider 选择默认使用 DeepSeek，默认模型为 `deepseek-v4-flash`，mock LLM 只在显式测试/开发环境启用
 - packaged app 导入中文 `.m4a`，并使用 Python Worker + faster-whisper tiny 生成中文真实 transcript
 - packaged app 在不注入 `DISTILL_PYTHON_COMMAND` 时也能自动发现项目 Python venv
 - transcript 会保存来源 provider、模型和生成它的 ProcessingJob ID

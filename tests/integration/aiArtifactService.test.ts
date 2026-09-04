@@ -32,7 +32,7 @@ describe('AIArtifactService', () => {
 
     expect(detail.processingState).toBe('succeeded');
     expect(detail.latestArtifact?.provider).toBe('mock');
-    expect(detail.latestArtifact?.model).toBe('deepseek-chat');
+    expect(detail.latestArtifact?.model).toBe('deepseek-v4-flash');
     expect(detail.latestArtifact?.promptVersion).toBe(builtInTemplates[0].promptVersion);
     expect(detail.latestArtifact?.content.title).toBe('结构化笔记');
     expect(detail.jobs.find((job) => job.kind === 'ai')?.state).toBe('succeeded');
@@ -186,7 +186,7 @@ async function createRecordingWithTranscript() {
 
 function mockSettings() {
   return {
-    getSettings: () => ({ deepSeekModel: 'deepseek-chat' })
+    getSettings: () => ({ deepSeekModel: 'deepseek-v4-flash' })
   };
 }
 

@@ -56,6 +56,6 @@ function request(): LLMRequest {
     transcript: 'hello',
     templateId: 'default-summary',
     prompt: 'Return JSON',
-    model: 'deepseek-chat'
+    model: 'deepseek-v4-flash'
   };
 }

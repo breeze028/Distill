@@ -24,7 +24,7 @@ describe('DeepSeekProvider', () => {
       transcript: '原始 transcript',
       templateId: 'default-summary',
       prompt: 'Return JSON',
-      model: 'deepseek-chat'
+      model: 'deepseek-v4-flash'
     });
 
     expect(result.content.title).toBe('录音摘要');
@@ -73,7 +73,7 @@ function request() {
     transcript: '原始 transcript',
     templateId: 'default-summary',
     prompt: 'Return JSON',
-    model: 'deepseek-chat'
+    model: 'deepseek-v4-flash'
   };
 }
 

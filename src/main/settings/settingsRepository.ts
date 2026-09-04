@@ -5,7 +5,7 @@ import type { SaveSettingsRequest } from '@shared/schemas/ipc';
 const defaults: AppSettings = {
   aiProvider: defaultAIProvider(),
   deepSeekApiKeyConfigured: Boolean(process.env.DEEPSEEK_API_KEY),
-  deepSeekModel: 'deepseek-chat',
+  deepSeekModel: 'deepseek-v4-flash',
   watchFolder: '',
   speechProvider: defaultSpeechProvider(),
   speechModel: 'faster-whisper-tiny',
