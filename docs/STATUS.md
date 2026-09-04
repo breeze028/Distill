@@ -33,6 +33,7 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - 导入后保存原始文件名、路径、导入时间、时长、大小、创建时间和格式。
 - 实现重复导入检测。
 - 实现 Library 列表。
+- 实现 Calendar 入口：按录音创建日期展示哪些天有记录，并可打开当天录音列表。
 - 实现 Recording Detail。
 - 使用 `distill-audio://recording/{id}` 安全协议播放本地音频。
 - `distill-audio://` 支持 byte range 响应，保证播放器 seek 后可以从目标位置读取音频数据。
@@ -119,6 +120,7 @@ pnpm dev
 - 中文文件名
 - 重复导入检测
 - SQLite migration
+- Calendar 月聚合、本地日期回退和按日录音列表
 - 启动恢复中断的 ProcessingJob
 - Transcript / AIArtifact / FTS 搜索基础 pipeline
 - packaged app 启动
@@ -126,6 +128,7 @@ pnpm dev
 - packaged app 通过拖拽导入音频
 - 导入后持久化
 - 点击录音进入详情
+- 打开 Calendar 后当前月可显示有记录日期；点击日期显示当天录音，点击当天录音回到详情页
 - 导入后自动触发 mock 转写
 - 手动触发 mock 转写
 - 转写后展示 transcript segment

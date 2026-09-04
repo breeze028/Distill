@@ -15,6 +15,12 @@ export type RecordingListItem = {
   tags: string[];
 };
 
+export type RecordingCalendarDay = {
+  date: string;
+  recordingCount: number;
+  totalDuration: number | null;
+};
+
 export type TranscriptSegment = {
   id: string;
   transcriptId: string;

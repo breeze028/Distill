@@ -1,11 +1,13 @@
-import type { AIArtifactTemplate, AppSettings, ImportRecordingResult, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
-import type { DeleteAIArtifactRequest, EditTranscriptSegmentRequest, SaveSettingsRequest } from './schemas/ipc';
+import type { AIArtifactTemplate, AppSettings, ImportRecordingResult, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
+import type { CalendarMonthRequest, DeleteAIArtifactRequest, EditTranscriptSegmentRequest, RecordingDateRequest, SaveSettingsRequest } from './schemas/ipc';
 
 export const ipcChannels = {
   recordingsList: 'recordings:list',
   recordingsGet: 'recordings:get',
   recordingsImportDialog: 'recordings:import-dialog',
   recordingsImportPath: 'recordings:import-path',
+  recordingsGetCalendarMonth: 'recordings:get-calendar-month',
+  recordingsListByDate: 'recordings:list-by-date',
   recordingsStartTranscription: 'recordings:start-transcription',
   recordingsTranscribe: 'recordings:transcribe',
   recordingsEditTranscriptSegment: 'recordings:edit-transcript-segment',
@@ -25,6 +27,8 @@ export type DistillApi = {
   getRecording(id: string): Promise<RecordingDetail | null>;
   importRecordingFromDialog(): Promise<ImportRecordingResult | null>;
   importRecordingFromPath(filePath: string): Promise<ImportRecordingResult>;
+  getCalendarMonth(input: CalendarMonthRequest): Promise<RecordingCalendarDay[]>;
+  listRecordingsByDate(input: RecordingDateRequest): Promise<RecordingListItem[]>;
   getPathForFile(file: File): string;
   startTranscription(id: string): Promise<RecordingDetail>;
   transcribeRecording(id: string): Promise<RecordingDetail>;

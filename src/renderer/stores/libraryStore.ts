@@ -1,11 +1,16 @@
 import { create } from 'zustand';
-import type { AIArtifactTemplate, AppSettings, ProcessingJobKind, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from '@shared/types/domain';
+import type { AIArtifactTemplate, AppSettings, ProcessingJobKind, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from '@shared/types/domain';
 
-type ViewMode = 'library' | 'inbox' | 'settings';
+type ViewMode = 'library' | 'calendar' | 'inbox' | 'settings';
+type CalendarMonth = { year: number; month: number };
 
 type LibraryState = {
   recordings: RecordingListItem[];
   selectedRecording: RecordingDetail | null;
+  calendarMonth: CalendarMonth;
+  calendarDays: RecordingCalendarDay[];
+  selectedCalendarDate: string | null;
+  calendarRecordings: RecordingListItem[];
   aiTemplates: AIArtifactTemplate[];
   settings: AppSettings | null;
   speechToTextStatus: SpeechToTextStatus | null;
@@ -13,6 +18,7 @@ type LibraryState = {
   query: string;
   viewMode: ViewMode;
   loading: boolean;
+  calendarLoading: boolean;
   importing: boolean;
   checkingSpeechToText: boolean;
   transcribingIds: Record<string, boolean>;
@@ -29,6 +35,9 @@ type LibraryState = {
   deleteAIArtifact(recordingId: string, artifactId: string): Promise<void>;
   search(query: string): Promise<void>;
   showLibrary(): void;
+  showCalendar(): Promise<void>;
+  loadCalendarMonth(year: number, month: number): Promise<void>;
+  selectCalendarDate(date: string): Promise<void>;
   showInbox(): Promise<void>;
   showSettings(): Promise<void>;
   saveSettings(settings: Parameters<typeof window.distillAPI.saveSettings>[0]): Promise<void>;
@@ -39,6 +48,10 @@ type LibraryState = {
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   recordings: [],
   selectedRecording: null,
+  calendarMonth: currentCalendarMonth(),
+  calendarDays: [],
+  selectedCalendarDate: null,
+  calendarRecordings: [],
   aiTemplates: [],
   settings: null,
   speechToTextStatus: null,
@@ -46,6 +59,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   query: '',
   viewMode: 'library',
   loading: false,
+  calendarLoading: false,
   importing: false,
   checkingSpeechToText: false,
   transcribingIds: {},
@@ -236,6 +250,56 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ viewMode: 'library', error: null });
   },
 
+  async showCalendar() {
+    const today = localDateKey(new Date());
+    const month = currentCalendarMonth();
+    set({ viewMode: 'calendar', calendarMonth: month, selectedCalendarDate: today, calendarLoading: true, error: null });
+    try {
+      const [calendarDays, calendarRecordings] = await Promise.all([
+        window.distillAPI.getCalendarMonth(month),
+        window.distillAPI.listRecordingsByDate({ date: today })
+      ]);
+      set({
+        calendarDays,
+        selectedCalendarDate: today,
+        calendarRecordings,
+        calendarLoading: false
+      });
+    } catch (error) {
+      set({ error: toMessage(error), calendarLoading: false });
+    }
+  },
+
+  async loadCalendarMonth(year, month) {
+    set({ calendarLoading: true, error: null, calendarMonth: { year, month } });
+    try {
+      const calendarDays = await window.distillAPI.getCalendarMonth({ year, month });
+      const selectedDate = get().selectedCalendarDate;
+      const selectedDateInMonth = selectedDate?.startsWith(`${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`) === true;
+      const calendarRecordings = selectedDateInMonth && selectedDate
+        ? await window.distillAPI.listRecordingsByDate({ date: selectedDate })
+        : [];
+      set({
+        calendarDays,
+        selectedCalendarDate: selectedDateInMonth ? selectedDate : null,
+        calendarRecordings,
+        calendarLoading: false
+      });
+    } catch (error) {
+      set({ error: toMessage(error), calendarLoading: false });
+    }
+  },
+
+  async selectCalendarDate(date) {
+    set({ selectedCalendarDate: date, calendarLoading: true, error: null });
+    try {
+      const calendarRecordings = await window.distillAPI.listRecordingsByDate({ date });
+      set({ calendarRecordings, calendarLoading: false });
+    } catch (error) {
+      set({ error: toMessage(error), calendarLoading: false });
+    }
+  },
+
   async showInbox() {
     const nextMode = get().viewMode === 'inbox' ? 'library' : 'inbox';
     set({ viewMode: nextMode, error: null });
@@ -351,4 +415,16 @@ function setRunningState(state: LibraryState, kind: ProcessingJobKind, id: strin
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function currentCalendarMonth(): CalendarMonth {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+}
+
+function localDateKey(date: Date): string {
+  const year = date.getFullYear().toString().padStart(4, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

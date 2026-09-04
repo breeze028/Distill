@@ -135,6 +135,7 @@
 - 搜索 Transcript、AI title、summary、key points、todos、tags
 - 支持中文文件名、中文 transcript、中英文混合搜索
 - Library 列表显示 title、date、duration、processing state、tags
+- Calendar 视图按日期展示哪些天有录音，并能打开当天录音列表
 - 基础筛选：Inbox、Today、Work、Ideas、Life 等可以先用虚拟分类或 tag 实现
 - 录音详情页强化阅读体验
 
@@ -143,6 +144,12 @@
 - 搜索速度在本地资料库规模增长后仍可接受
 - 搜索结果能打开对应 Recording
 - 中文搜索不崩溃，结果可解释
+
+当前已完成：
+
+- 已新增 Sidebar Calendar 入口，用月历展示当前月哪些日期有录音。
+- 已新增 `recordings:get-calendar-month` 和 `recordings:list-by-date` IPC，Main 侧按 `createdAt ?? importedAt` 的本地日期聚合。
+- 点击日期会在 Calendar 主面板显示当天录音列表，点击录音会回到现有 Recording Detail。
 
 ## Phase 4：Watch Folder
 

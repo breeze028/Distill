@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { SqliteDatabase } from '@main/database/database';
-import type { AIArtifact, AIArtifactContent, ProcessingJob, ProcessingJobKind, ProcessingState, RecordingDetail, RecordingListItem, SpeechToTextProvider, Transcript } from '@shared/types/domain';
+import type { AIArtifact, AIArtifactContent, ProcessingJob, ProcessingJobKind, ProcessingState, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextProvider, Transcript } from '@shared/types/domain';
 import { aiArtifactContentSchema } from '@shared/schemas/ai';
 
 type RecordingRow = {
@@ -133,6 +133,43 @@ export class RecordingRepository {
       .prepare('SELECT * FROM recording ORDER BY imported_at DESC')
       .all() as RecordingRow[];
     return rows.map((row) => this.toListItem(row));
+  }
+
+  getCalendarMonth(year: number, month: number): RecordingCalendarDay[] {
+    const monthPrefix = `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`;
+    const rows = this.db.prepare('SELECT * FROM recording').all() as RecordingRow[];
+    const days = new Map<string, { recordingCount: number; totalDuration: number; hasDuration: boolean }>();
+
+    for (const row of rows) {
+      const date = recordingDateKey(row);
+      if (!date.startsWith(monthPrefix)) {
+        continue;
+      }
+
+      const current = days.get(date) ?? { recordingCount: 0, totalDuration: 0, hasDuration: false };
+      current.recordingCount += 1;
+      if (typeof row.duration === 'number' && Number.isFinite(row.duration)) {
+        current.totalDuration += row.duration;
+        current.hasDuration = true;
+      }
+      days.set(date, current);
+    }
+
+    return [...days.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([date, day]) => ({
+        date,
+        recordingCount: day.recordingCount,
+        totalDuration: day.hasDuration ? day.totalDuration : null
+      }));
+  }
+
+  listRecordingsByDate(date: string): RecordingListItem[] {
+    const rows = this.db.prepare('SELECT * FROM recording').all() as RecordingRow[];
+    return rows
+      .filter((row) => recordingDateKey(row) === date)
+      .sort((left, right) => recordingTimeMs(right) - recordingTimeMs(left))
+      .map((row) => this.toListItem(row));
   }
 
   getRecording(id: string): RecordingDetail | null {
@@ -609,4 +646,29 @@ function toProcessingJob(row: ProcessingJobRow): ProcessingJob {
 
 function toSpeechToTextProvider(value: string | null): SpeechToTextProvider | null {
   return value === 'mock' || value === 'python' ? value : null;
+}
+
+function recordingDateKey(row: RecordingRow): string {
+  return formatLocalDate(recordingDate(row));
+}
+
+function recordingTimeMs(row: RecordingRow): number {
+  return recordingDate(row).getTime();
+}
+
+function recordingDate(row: RecordingRow): Date {
+  const createdAt = row.created_at ? new Date(row.created_at) : null;
+  if (createdAt && Number.isFinite(createdAt.getTime())) {
+    return createdAt;
+  }
+
+  const importedAt = new Date(row.imported_at);
+  return Number.isFinite(importedAt.getTime()) ? importedAt : new Date(0);
+}
+
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear().toString().padStart(4, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

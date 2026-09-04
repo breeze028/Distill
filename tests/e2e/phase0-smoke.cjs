@@ -5,7 +5,8 @@ const { _electron } = require('playwright');
 
 async function main() {
   const root = path.resolve(__dirname, '..', '..');
-  const audio = path.join(root, 'test-fixtures', 'phase1-transcript-long-中文-test.m4a');
+  const fixtureAudio = path.join(root, 'test-fixtures', 'phase1-transcript-long-中文-test.m4a');
+  const audio = path.join(root, 'test-results', 'phase1-transcript-long-中文-test.m4a');
   const db = path.join(root, 'test-results', 'phase0-ui.db');
   const exe = path.join(root, 'out', 'distill-win32-x64', 'distill.exe');
   const watchDir = path.join(root, 'test-results', 'watch-folder');
@@ -16,7 +17,9 @@ async function main() {
   fs.rmSync(watchDir, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(db), { recursive: true });
   fs.mkdirSync(watchDir, { recursive: true });
-  ensureAudioFixture(audio, 75);
+  ensureAudioFixture(fixtureAudio, 75);
+  fs.rmSync(audio, { force: true });
+  fs.copyFileSync(fixtureAudio, audio);
 
   const app = await launchApp(exe, db);
 
@@ -41,6 +44,9 @@ async function main() {
   let aiArtifactHistoryVisible = false;
   let aiArtifactDeleteMenuVisible = false;
   let aiArtifactDeleted = false;
+  let calendarDayVisible = false;
+  let calendarDayDetailVisible = false;
+  let calendarRecordingOpenedDetail = false;
   let watchFolderRunning = false;
   let watchFolderImported = false;
   let watchFolderAutoTranscribed = false;
@@ -64,6 +70,25 @@ async function main() {
     await win.waitForTimeout(1000);
     await win.getByText('phase1-transcript-long-中文-test').first().click();
     await win.waitForTimeout(500);
+    const calendarDate = await win.evaluate((id) => {
+      const pad = (value) => String(value).padStart(2, '0');
+      return window.distillAPI.getRecording(id).then((recording) => {
+        const date = new Date(recording.createdAt ?? recording.importedAt);
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+      });
+    }, imported.recording.id);
+    await win.getByRole('button', { name: 'Calendar' }).click();
+    await win.getByText('按录音创建日期展示记录分布').waitFor();
+    const calendarDay = win.locator(`[data-testid="calendar-day"][data-date="${calendarDate}"]`);
+    await calendarDay.getByText('条记录').waitFor();
+    calendarDayVisible = true;
+    await calendarDay.click();
+    const calendarRecording = win.locator(`[data-testid="calendar-recording-row"][data-recording-id="${imported.recording.id}"]`);
+    await calendarRecording.waitFor();
+    calendarDayDetailVisible = true;
+    await calendarRecording.click();
+    await win.getByRole('button', { name: 'Retranscribe' }).waitFor();
+    calendarRecordingOpenedDetail = true;
     await win.getByRole('button', { name: 'Settings', exact: true }).click();
     await win.getByText('Speech-to-Text Model').waitFor();
     await win.getByText('Mock STT ready').waitFor();
@@ -245,6 +270,9 @@ async function main() {
         aiArtifactHistoryVisible,
         aiArtifactDeleteMenuVisible,
         aiArtifactDeleted,
+        calendarDayVisible,
+        calendarDayDetailVisible,
+        calendarRecordingOpenedDetail,
         watchFolderRunning,
         watchFolderImported,
         watchFolderAutoTranscribed,
@@ -323,6 +351,15 @@ async function main() {
   }
   if (!aiArtifactDeleted) {
     throw new Error('Expected AI artifact history Delete action to remove the selected artifact.');
+  }
+  if (!calendarDayVisible) {
+    throw new Error('Expected Calendar to show the imported recording date.');
+  }
+  if (!calendarDayDetailVisible) {
+    throw new Error('Expected clicking a calendar date to show that day recording list.');
+  }
+  if (!calendarRecordingOpenedDetail) {
+    throw new Error('Expected clicking a calendar day recording to open recording detail.');
   }
   if (!watchFolderRunning) {
     throw new Error('Expected watch folder to be running after saving settings.');

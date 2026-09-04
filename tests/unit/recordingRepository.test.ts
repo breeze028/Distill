@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DatabaseManager } from '@main/database/database';
 import { RecordingRepository } from '@main/repositories/recordingRepository';
+import type { NewRecording } from '@main/repositories/recordingRepository';
 
 let tmpDir = '';
 let dbManager: DatabaseManager;
@@ -107,9 +108,57 @@ describe('RecordingRepository', () => {
     expect(repository.search('改后关键词').map((item) => item.id)).toContain(recording.id);
     expect(repository.search('旧关键词').map((item) => item.id)).not.toContain(recording.id);
   });
+
+  it('uses recording creation dates for calendar month grouping', () => {
+    const repository = new RecordingRepository(dbManager.open());
+    const morning = repository.createRecording(newRecording('morning.m4a', {
+      createdAt: new Date(2026, 8, 2, 9, 30).toISOString(),
+      duration: 10
+    }));
+    const evening = repository.createRecording(newRecording('evening.m4a', {
+      createdAt: new Date(2026, 8, 2, 21, 0).toISOString(),
+      duration: 20
+    }));
+    repository.createRecording(newRecording('next-day.m4a', {
+      createdAt: new Date(2026, 8, 3, 8, 0).toISOString(),
+      duration: null
+    }));
+
+    const days = repository.getCalendarMonth(2026, 9);
+    const recordings = repository.listRecordingsByDate('2026-09-02');
+
+    expect(days).toEqual([
+      { date: '2026-09-02', recordingCount: 2, totalDuration: 30 },
+      { date: '2026-09-03', recordingCount: 1, totalDuration: null }
+    ]);
+    expect(recordings.map((recording) => recording.id)).toEqual([evening.id, morning.id]);
+  });
+
+  it('falls back to import date when a recording has no creation date', () => {
+    const repository = new RecordingRepository(dbManager.open());
+    const recording = repository.createRecording(newRecording('fallback-date.m4a', {
+      createdAt: null,
+      duration: 5
+    }));
+    const today = formatLocalDate(new Date(recording.importedAt));
+    const [year, month] = today.split('-').map(Number);
+
+    const days = repository.getCalendarMonth(year ?? 0, month ?? 0);
+    const recordings = repository.listRecordingsByDate(today);
+
+    expect(days).toContainEqual({ date: today, recordingCount: 1, totalDuration: 5 });
+    expect(recordings.map((item) => item.id)).toEqual([recording.id]);
+  });
 });
 
-function newRecording(fileName: string) {
+function newRecording(fileName: string, overrides: Partial<NewRecording> = {}): NewRecording {
+  return {
+    ...baseRecording(fileName),
+    ...overrides
+  };
+}
+
+function baseRecording(fileName: string): NewRecording {
   const filePath = path.join(tmpDir, fileName);
   fs.writeFileSync(filePath, Buffer.from('fake-audio'));
   return {
@@ -123,4 +172,11 @@ function newRecording(fileName: string) {
     duration: 3,
     createdAt: null
   };
+}
+
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear().toString().padStart(4, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

@@ -1,7 +1,7 @@
 import { dialog, ipcMain } from 'electron';
 import { ipcChannels } from '@shared/ipc';
 import type { ImportRecordingResult } from '@shared/types/domain';
-import { deleteAIArtifactRequestSchema, editTranscriptSegmentRequestSchema, generateAIArtifactRequestSchema, importRecordingRequestSchema, saveSettingsRequestSchema } from '@shared/schemas/ipc';
+import { calendarMonthRequestSchema, deleteAIArtifactRequestSchema, editTranscriptSegmentRequestSchema, generateAIArtifactRequestSchema, importRecordingRequestSchema, recordingDateRequestSchema, saveSettingsRequestSchema } from '@shared/schemas/ipc';
 import type { FileImportService } from '@main/services/fileImportService';
 import type { TranscriptionService } from '@main/services/transcriptionService';
 import type { AIArtifactService } from '@main/services/aiArtifactService';
@@ -53,6 +53,16 @@ export function registerIpcHandlers(dependencies: {
   ipcMain.handle(ipcChannels.recordingsImportPath, (_event, input: unknown) => {
     const parsed = importRecordingRequestSchema.parse(input);
     return importAndMaybeTranscribe(parsed.filePath);
+  });
+
+  ipcMain.handle(ipcChannels.recordingsGetCalendarMonth, (_event, input: unknown) => {
+    const parsed = calendarMonthRequestSchema.parse(input);
+    return dependencies.recordings.getCalendarMonth(parsed.year, parsed.month);
+  });
+
+  ipcMain.handle(ipcChannels.recordingsListByDate, (_event, input: unknown) => {
+    const parsed = recordingDateRequestSchema.parse(input);
+    return dependencies.recordings.listRecordingsByDate(parsed.date);
   });
 
   ipcMain.handle(ipcChannels.recordingsStartTranscription, (_event, id: string) => dependencies.transcriber.startTranscription(id));

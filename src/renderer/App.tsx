@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent, MouseEvent } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, FileAudio, FolderOpen, Import, Library, Pencil, RefreshCw, Save, Search, Settings, Trash2, Upload, X, XCircle } from 'lucide-react';
-import type { AIArtifact, AIArtifactTemplate, ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
+import { AlertCircle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, FileAudio, FolderOpen, Import, Library, Pencil, RefreshCw, Save, Search, Settings, Trash2, Upload, X, XCircle } from 'lucide-react';
+import type { AIArtifact, AIArtifactTemplate, ProcessingJob, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { cn } from '@renderer/lib/utils';
@@ -11,6 +11,10 @@ export function App() {
   const {
     recordings,
     selectedRecording,
+    calendarMonth,
+    calendarDays,
+    selectedCalendarDate,
+    calendarRecordings,
     aiTemplates,
     settings,
     speechToTextStatus,
@@ -18,6 +22,7 @@ export function App() {
     query,
     viewMode,
     loading,
+    calendarLoading,
     importing,
     checkingSpeechToText,
     transcribingIds,
@@ -33,6 +38,9 @@ export function App() {
     deleteAIArtifact,
     search,
     showLibrary,
+    showCalendar,
+    loadCalendarMonth,
+    selectCalendarDate,
     showInbox,
     showSettings,
     saveSettings,
@@ -105,6 +113,7 @@ export function App() {
         onQueryChange={(value) => void search(value)}
         onImport={() => void importFromDialog()}
         onLibrary={showLibrary}
+        onCalendar={() => void showCalendar()}
         onInbox={() => void showInbox()}
         onSettings={() => void showSettings()}
         importing={importing}
@@ -126,6 +135,22 @@ export function App() {
             checkingSpeechToText={checkingSpeechToText}
             onSave={(input) => void saveSettings(input)}
             onRefreshSpeechToText={() => void refreshSpeechToTextStatus()}
+          />
+        ) : viewMode === 'calendar' ? (
+          <CalendarPane
+            month={calendarMonth}
+            days={calendarDays}
+            selectedDate={selectedCalendarDate}
+            recordings={calendarRecordings}
+            loading={calendarLoading}
+            onMonthChange={(year, month) => void loadCalendarMonth(year, month)}
+            onToday={() => {
+              const today = localDateKey(new Date());
+              const [year, month] = calendarParts(today);
+              void loadCalendarMonth(year, month).then(() => selectCalendarDate(today));
+            }}
+            onSelectDate={(date) => void selectCalendarDate(date)}
+            onSelectRecording={(id) => void selectRecording(id)}
           />
         ) : viewMode === 'inbox' ? (
           <InboxPane settings={settings} watchFolderStatus={watchFolderStatus} onOpenSettings={() => void showSettings()} />
@@ -175,11 +200,12 @@ function getDroppedFilePath(file: File): string {
 
 function Sidebar(props: {
   query: string;
-  activeView: 'library' | 'inbox' | 'settings';
+  activeView: 'library' | 'calendar' | 'inbox' | 'settings';
   importing: boolean;
   onQueryChange(value: string): void;
   onImport(): void;
   onLibrary(): void;
+  onCalendar(): void;
   onInbox(): void;
   onSettings(): void;
 }) {
@@ -207,6 +233,7 @@ function Sidebar(props: {
 
       <nav className="mt-5 space-y-1">
         <SidebarItem icon={<Library className="h-4 w-4" />} label="Library" active={props.activeView === 'library'} onClick={props.onLibrary} />
+        <SidebarItem icon={<CalendarDays className="h-4 w-4" />} label="Calendar" active={props.activeView === 'calendar'} onClick={props.onCalendar} />
         <SidebarItem icon={<FolderOpen className="h-4 w-4" />} label="Inbox" active={props.activeView === 'inbox'} onClick={props.onInbox} />
         <SidebarItem icon={<Settings className="h-4 w-4" />} label="Settings" active={props.activeView === 'settings'} onClick={props.onSettings} />
       </nav>
@@ -314,6 +341,112 @@ function EmptyLibrary(props: { onImport(): void; importing: boolean }) {
         Import Recording
       </Button>
     </div>
+  );
+}
+
+function CalendarPane(props: {
+  month: { year: number; month: number };
+  days: RecordingCalendarDay[];
+  selectedDate: string | null;
+  recordings: RecordingListItem[];
+  loading: boolean;
+  onMonthChange(year: number, month: number): void;
+  onToday(): void;
+  onSelectDate(date: string): void;
+  onSelectRecording(id: string): void;
+}) {
+  const today = localDateKey(new Date());
+  const cells = calendarCells(props.month.year, props.month.month);
+  const dayByDate = new Map(props.days.map((day) => [day.date, day]));
+  const selectedLabel = props.selectedDate ? formatCalendarDateLabel(props.selectedDate) : '选择一天';
+
+  return (
+    <section className="flex h-full min-h-0 flex-col px-8 py-6">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border pb-5">
+        <div>
+          <h1 className="text-2xl font-semibold">{formatCalendarMonthLabel(props.month.year, props.month.month)}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">按录音创建日期展示记录分布</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="icon" variant="secondary" title="Previous month" onClick={() => props.onMonthChange(...shiftCalendarMonth(props.month, -1))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="secondary" onClick={props.onToday}>今天</Button>
+          <Button size="icon" variant="secondary" title="Next month" onClick={() => props.onMonthChange(...shiftCalendarMonth(props.month, 1))}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto pt-5">
+        <div className="grid grid-cols-7 border-l border-t border-border text-xs font-medium text-muted-foreground">
+          {['一', '二', '三', '四', '五', '六', '日'].map((day) => (
+            <div key={day} className="border-b border-r border-border px-2 py-2 text-center">周{day}</div>
+          ))}
+          {cells.map((cell) => {
+            const day = dayByDate.get(cell.date);
+            const selected = cell.date === props.selectedDate;
+            const isToday = cell.date === today;
+            return (
+              <button
+                key={cell.date}
+                data-testid="calendar-day"
+                data-date={cell.date}
+                className={cn(
+                  'flex h-24 min-w-0 flex-col border-b border-r border-border px-2 py-2 text-left hover:bg-muted',
+                  !cell.inCurrentMonth && 'bg-surface text-muted-foreground/60',
+                  selected && 'bg-muted ring-1 ring-inset ring-accent',
+                  isToday && !selected && 'bg-accent/5'
+                )}
+                onClick={() => props.onSelectDate(cell.date)}
+              >
+                <span className={cn('text-sm tabular-nums', isToday && 'font-semibold text-accent')}>{cell.dayNumber}</span>
+                {day ? (
+                  <span className="mt-auto min-w-0">
+                    <span className="block truncate text-xs font-medium text-foreground">{day.recordingCount} 条记录</span>
+                    <span className="block truncate text-xs text-muted-foreground">{formatDuration(day.totalDuration)}</span>
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        <section data-testid="calendar-day-detail" className="mt-6 border-t border-border pt-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">{selectedLabel}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {props.selectedDate ? `${props.recordings.length} 条录音` : '点击日期查看当天录音'}
+              </p>
+            </div>
+            {props.loading ? <span className="text-sm text-muted-foreground">Loading...</span> : null}
+          </div>
+
+          {props.selectedDate && props.recordings.length > 0 ? (
+            <div className="mt-4 divide-y divide-border">
+              {props.recordings.map((recording) => (
+                <button
+                  key={recording.id}
+                  data-testid="calendar-recording-row"
+                  data-recording-id={recording.id}
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-4 px-1 py-3 text-left hover:bg-muted"
+                  onClick={() => props.onSelectRecording(recording.id)}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{recording.title}</span>
+                    <span className="mt-1 block truncate text-xs text-muted-foreground">{recording.originalFileName}</span>
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatDuration(recording.duration)}</span>
+                </button>
+              ))}
+            </div>
+          ) : props.selectedDate ? (
+            <p className="mt-4 text-sm text-muted-foreground">这一天没有录音。</p>
+          ) : null}
+        </section>
+      </div>
+    </section>
   );
 }
 
@@ -1031,6 +1164,53 @@ function formatWatchFolderStatus(status: WatchFolderStatus | null): string {
     return '需要检查';
   }
   return status.running ? '监听中' : '未运行';
+}
+
+type CalendarCell = {
+  date: string;
+  dayNumber: number;
+  inCurrentMonth: boolean;
+};
+
+function calendarCells(year: number, month: number): CalendarCell[] {
+  const firstDay = new Date(year, month - 1, 1);
+  const mondayOffset = (firstDay.getDay() + 6) % 7;
+  const start = new Date(year, month - 1, 1 - mondayOffset);
+
+  return Array.from({ length: 42 }, (_item, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return {
+      date: localDateKey(date),
+      dayNumber: date.getDate(),
+      inCurrentMonth: date.getFullYear() === year && date.getMonth() === month - 1
+    };
+  });
+}
+
+function shiftCalendarMonth(month: { year: number; month: number }, delta: number): [number, number] {
+  const date = new Date(month.year, month.month - 1 + delta, 1);
+  return [date.getFullYear(), date.getMonth() + 1];
+}
+
+function calendarParts(date: string): [number, number] {
+  const [year, month] = date.split('-').map(Number);
+  return [year ?? 0, month ?? 0];
+}
+
+function localDateKey(date: Date): string {
+  const year = date.getFullYear().toString().padStart(4, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatCalendarMonthLabel(year: number, month: number): string {
+  return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long' }).format(new Date(year, month - 1, 1));
+}
+
+function formatCalendarDateLabel(date: string): string {
+  return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date(`${date}T12:00:00`));
 }
 
 function Field(props: { label: string; children: React.ReactNode }) {
