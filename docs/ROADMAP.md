@@ -49,6 +49,7 @@
 - UI 显示转写 elapsed time，并解释首次模型下载/加载导致的等待
 - Transcript 面板支持长音频、多段 transcript 在右栏内独立滚动阅读
 - 点击 Transcript Segment 后音频稳定 seek 到 segment start time，并从对应时间继续播放
+- Transcript Segment 支持人工修正，并保留原始机器转写版本
 - 保留 mock STT 测试，不让自动化测试依赖真实 Whisper 模型
 - 真实用户导入默认走 Python Worker，mock STT 只用于显式测试/开发
 
@@ -81,6 +82,7 @@
 - 已强化 transcript segment 点击回听，通过 media fragment 重载播放器源，并等待 metadata、seek 和可播放数据就绪后再播放，避免从头播放。
 - 已为本地音频协议增加 byte range 响应，保证 M4A/MP3/WAV seek 后能从目标时间继续读取音频数据。
 - 已为 Transcript 面板增加独立、可见、稳定的垂直滚动条，并用长 transcript 验证实际 overflow。
+- 已支持在详情页手动编辑 transcript segment；保存时 Main 侧会创建新的 transcript revision、重建 `full_text` 并刷新搜索索引，原始机器转写仍保留在数据库中。
 
 ## Phase 2：AI Template 与 DeepSeek 结构化笔记
 

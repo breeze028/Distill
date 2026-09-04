@@ -54,6 +54,7 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - Recording Detail 可以展示 transcript segment。
 - Transcript 面板有独立、稳定且可见的垂直滚动条，长音频生成的多段 transcript 可以在详情页右栏内滚动阅读。
 - 点击 transcript segment 会把播放器源重载为带 media fragment 的目标时间 URL，并等待音频 metadata/seek/可播放数据就绪后再播放；音频协议支持 Range 请求，避免 M4A seek 后实际播放又回到 0 秒。
+- Transcript segment 已支持行内人工编辑；保存后会生成新的最新 transcript 版本，重建 `full_text` 与 FTS 搜索索引，并保留原始机器转写版本。
 - Python Worker 已接入 faster-whisper 调用。
 - Main 到 Python Worker 的 JSON 进程协议已增加响应校验、结构化错误、超时和打包路径解析。
 - 打包配置会把 `python/` 作为 extra resource 带入应用。
@@ -131,6 +132,7 @@ pnpm dev
 - 重开打包应用后 transcript 仍然可见
 - Transcript 面板使用稳定、可见 scrollbar；已用 75 秒、36 段 mock transcript 验证右栏可滚动
 - 点击 transcript segment 会 seek 到对应音频时间点；已验证 `distill-audio://` Range fetch 返回 206，点击第 30 秒附近 segment 后播放器源包含 `#t=30.000`，进入约 31.67 秒且保持播放
+- 手动编辑 transcript segment 后，最新 transcript、segment 文本和搜索索引会同步更新；旧 transcript 版本仍保留在数据库中
 - 点击 Retranscribe 会立即显示新任务的运行耗时
 - 点击 Generate Notes 会立即显示 AI 生成任务耗时
 - mock LLM 生成的 `AIArtifact` 可在详情页 Summary 区展示并持久化

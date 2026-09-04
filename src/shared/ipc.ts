@@ -1,5 +1,5 @@
 import type { AIArtifactTemplate, AppSettings, ImportRecordingResult, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
-import type { SaveSettingsRequest } from './schemas/ipc';
+import type { EditTranscriptSegmentRequest, SaveSettingsRequest } from './schemas/ipc';
 
 export const ipcChannels = {
   recordingsList: 'recordings:list',
@@ -8,6 +8,7 @@ export const ipcChannels = {
   recordingsImportPath: 'recordings:import-path',
   recordingsStartTranscription: 'recordings:start-transcription',
   recordingsTranscribe: 'recordings:transcribe',
+  recordingsEditTranscriptSegment: 'recordings:edit-transcript-segment',
   recordingsStartAIGeneration: 'recordings:start-ai-generation',
   aiTemplatesList: 'ai-templates:list',
   recordingsSearch: 'recordings:search',
@@ -26,6 +27,7 @@ export type DistillApi = {
   getPathForFile(file: File): string;
   startTranscription(id: string): Promise<RecordingDetail>;
   transcribeRecording(id: string): Promise<RecordingDetail>;
+  editTranscriptSegment(input: EditTranscriptSegmentRequest): Promise<RecordingDetail>;
   startAIGeneration(recordingId: string, templateId?: string): Promise<RecordingDetail>;
   listAITemplates(): Promise<AIArtifactTemplate[]>;
   searchRecordings(query: string): Promise<RecordingListItem[]>;

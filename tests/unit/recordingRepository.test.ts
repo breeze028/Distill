@@ -61,6 +61,52 @@ describe('RecordingRepository', () => {
     expect(detail?.processingState).toBe('succeeded');
     expect(detail?.transcript?.fullText).toBe('已经有转写文本。');
   });
+
+  it('edits a transcript segment by creating a latest transcript revision and refreshing search', () => {
+    const db = dbManager.open();
+    const repository = new RecordingRepository(db);
+    const recording = repository.createRecording(newRecording('editable-transcript.m4a'));
+    const original = repository.addTranscript(recording.id, {
+      language: 'zh',
+      duration: 5,
+      provider: 'python',
+      model: 'medium',
+      sourceJobId: null,
+      fullText: '第一句。\n旧关键词。',
+      segments: [
+        {
+          id: 'ignored',
+          transcriptId: 'ignored',
+          startTime: 0,
+          endTime: 2,
+          text: '第一句。'
+        },
+        {
+          id: 'ignored',
+          transcriptId: 'ignored',
+          startTime: 2,
+          endTime: 5,
+          text: '旧关键词。'
+        }
+      ]
+    });
+
+    const updated = repository.editTranscriptSegment(recording.id, original.id, original.segments[1]?.id ?? '', '改后关键词。');
+    const transcriptRows = db
+      .prepare('SELECT id, full_text FROM transcript WHERE recording_id = ? ORDER BY created_at ASC, rowid ASC')
+      .all(recording.id) as Array<{ id: string; full_text: string }>;
+
+    expect(updated.transcript?.id).not.toBe(original.id);
+    expect(updated.transcript?.provider).toBe('python');
+    expect(updated.transcript?.model).toBe('medium');
+    expect(updated.transcript?.fullText).toBe('第一句。\n改后关键词。');
+    expect(updated.transcript?.segments[1]?.text).toBe('改后关键词。');
+    expect(transcriptRows).toHaveLength(2);
+    expect(transcriptRows[0]?.id).toBe(original.id);
+    expect(transcriptRows[0]?.full_text).toContain('旧关键词');
+    expect(repository.search('改后关键词').map((item) => item.id)).toContain(recording.id);
+    expect(repository.search('旧关键词').map((item) => item.id)).not.toContain(recording.id);
+  });
 });
 
 function newRecording(fileName: string) {

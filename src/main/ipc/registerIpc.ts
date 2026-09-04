@@ -1,7 +1,7 @@
 import { dialog, ipcMain } from 'electron';
 import { ipcChannels } from '@shared/ipc';
 import type { ImportRecordingResult } from '@shared/types/domain';
-import { generateAIArtifactRequestSchema, importRecordingRequestSchema, saveSettingsRequestSchema } from '@shared/schemas/ipc';
+import { editTranscriptSegmentRequestSchema, generateAIArtifactRequestSchema, importRecordingRequestSchema, saveSettingsRequestSchema } from '@shared/schemas/ipc';
 import type { FileImportService } from '@main/services/fileImportService';
 import type { TranscriptionService } from '@main/services/transcriptionService';
 import type { AIArtifactService } from '@main/services/aiArtifactService';
@@ -58,6 +58,11 @@ export function registerIpcHandlers(dependencies: {
   ipcMain.handle(ipcChannels.recordingsStartTranscription, (_event, id: string) => dependencies.transcriber.startTranscription(id));
 
   ipcMain.handle(ipcChannels.recordingsTranscribe, (_event, id: string) => dependencies.transcriber.transcribeRecording(id));
+
+  ipcMain.handle(ipcChannels.recordingsEditTranscriptSegment, (_event, input: unknown) => {
+    const parsed = editTranscriptSegmentRequestSchema.parse(input);
+    return dependencies.recordings.editTranscriptSegment(parsed.recordingId, parsed.transcriptId, parsed.segmentId, parsed.text);
+  });
 
   ipcMain.handle(ipcChannels.recordingsStartAIGeneration, (_event, input: unknown) => {
     const parsed = generateAIArtifactRequestSchema.parse(input);

@@ -171,7 +171,13 @@ export class RecordingRepository {
       .prepare(
         `SELECT DISTINCT r.*
          FROM recording r
-         LEFT JOIN transcript tr ON tr.recording_id = r.id
+         LEFT JOIN transcript tr ON tr.id = (
+           SELECT latest_tr.id
+           FROM transcript latest_tr
+           WHERE latest_tr.recording_id = r.id
+           ORDER BY latest_tr.created_at DESC, latest_tr.rowid DESC
+           LIMIT 1
+         )
          LEFT JOIN ai_artifact a ON a.recording_id = r.id
          LEFT JOIN recording_tag rt ON rt.recording_id = r.id
          LEFT JOIN tag t ON t.id = rt.tag_id
@@ -232,6 +238,72 @@ export class RecordingRepository {
       throw new Error('Transcript was inserted but could not be loaded.');
     }
     return saved;
+  }
+
+  editTranscriptSegment(recordingId: string, transcriptId: string, segmentId: string, text: string): RecordingDetail {
+    const nextText = text.trim();
+    if (!nextText) {
+      throw new Error('Transcript segment text cannot be empty.');
+    }
+
+    const transcript = this.db
+      .prepare('SELECT * FROM transcript WHERE id = ? AND recording_id = ?')
+      .get(transcriptId, recordingId) as TranscriptRow | undefined;
+    if (!transcript) {
+      throw new Error('Transcript was not found for this recording.');
+    }
+
+    const segments = this.db
+      .prepare('SELECT * FROM transcript_segment WHERE transcript_id = ? ORDER BY start_time ASC')
+      .all(transcriptId) as SegmentRow[];
+    if (!segments.some((segment) => segment.id === segmentId)) {
+      throw new Error('Transcript segment was not found for this transcript.');
+    }
+
+    const nextSegments = segments.map((segment) => ({
+      ...segment,
+      text: segment.id === segmentId ? nextText : segment.text
+    }));
+    const nextTranscriptId = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    const fullText = nextSegments.map((segment) => segment.text).join('\n');
+
+    const write = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO transcript (
+            id, recording_id, language, duration, provider, model, source_job_id, full_text, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          nextTranscriptId,
+          recordingId,
+          transcript.language,
+          transcript.duration,
+          transcript.provider,
+          transcript.model,
+          transcript.source_job_id,
+          fullText,
+          createdAt
+        );
+
+      const insertSegment = this.db.prepare(
+        'INSERT INTO transcript_segment (id, transcript_id, start_time, end_time, text) VALUES (?, ?, ?, ?, ?)'
+      );
+      for (const segment of nextSegments) {
+        insertSegment.run(crypto.randomUUID(), nextTranscriptId, segment.start_time, segment.end_time, segment.text);
+      }
+
+      this.db.prepare("UPDATE recording SET processing_state = 'succeeded' WHERE id = ?").run(recordingId);
+      this.refreshSearchIndex(recordingId);
+    });
+
+    write();
+    const updated = this.getRecording(recordingId);
+    if (!updated) {
+      throw new Error('Recording disappeared after transcript edit.');
+    }
+    return updated;
   }
 
   addAIArtifact(input: Omit<AIArtifact, 'id' | 'createdAt'>): AIArtifact {
@@ -380,7 +452,7 @@ export class RecordingRepository {
 
   private getLatestTranscript(recordingId: string): Transcript | null {
     const row = this.db
-      .prepare('SELECT * FROM transcript WHERE recording_id = ? ORDER BY created_at DESC LIMIT 1')
+      .prepare('SELECT * FROM transcript WHERE recording_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1')
       .get(recordingId) as TranscriptRow | undefined;
 
     if (!row) {

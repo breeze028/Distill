@@ -44,7 +44,7 @@ AI 笔记生成使用 `recordings:start-ai-generation`。Renderer 只提交 reco
 
 数据库 migration 位于 `src/main/database/migrations`。
 
-`transcript` 永久保存原始转写文本，并记录 `provider`、`model` 和 `source_job_id`。AI 生成内容必须写入 `ai_artifact`，不能覆盖 transcript 原文。
+`transcript` 永久保存原始转写文本，并记录 `provider`、`model` 和 `source_job_id`。手动编辑 transcript segment 时不会原地覆盖旧 transcript，而是复制当前 transcript 生成一个新的最新版本，并同步重建 `full_text` 与 FTS 索引。AI 生成内容必须写入 `ai_artifact`，不能覆盖 transcript 原文。
 
 ## 搜索
 

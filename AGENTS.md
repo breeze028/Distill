@@ -50,5 +50,6 @@ Distill 是一个本地优先的 Windows 桌面语音笔记资料库。核心对
 - 较大修改前先阅读本文件。
 - 修改保持聚焦，并维护现有架构边界。
 - 优先直接实现并验证，不要让用户手动编码。
+- 涉及状态、数据模型或用户操作链路的改动，必须完整检查 Renderer、Preload API、IPC channel、Main handler、service/repository、数据库读写/迁移、测试和文档是否同步，避免只改前端或只改后端造成半成品行为。
 - 架构发生变化时，同步更新架构文档。
 - 完成较大阶段或改变核心流程后，同步更新 `docs/ROADMAP.md` 和 `docs/STATUS.md`。

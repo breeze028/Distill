@@ -24,6 +24,7 @@ type LibraryState = {
   importFromPath(filePath: string): Promise<void>;
   importFromPaths(filePaths: string[]): Promise<void>;
   transcribeRecording(id: string): Promise<void>;
+  editTranscriptSegment(recordingId: string, transcriptId: string, segmentId: string, text: string): Promise<void>;
   generateArtifact(id: string, templateId?: string): Promise<void>;
   search(query: string): Promise<void>;
   showLibrary(): void;
@@ -165,6 +166,23 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         const { [id]: _finished, ...remaining } = state.transcribingIds;
         return { transcribingIds: remaining };
       });
+    }
+  },
+
+  async editTranscriptSegment(recordingId, transcriptId, segmentId, text) {
+    set({ error: null, viewMode: 'library' });
+    try {
+      const recording = await window.distillAPI.editTranscriptSegment({
+        recordingId,
+        transcriptId,
+        segmentId,
+        text
+      });
+      const recordings = await window.distillAPI.listRecordings();
+      set({ recordings, selectedRecording: recording });
+    } catch (error) {
+      set({ error: toMessage(error) });
+      throw error;
     }
   },
 

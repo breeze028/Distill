@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, FileAudio, FolderOpen, Import, Library, RefreshCw, Search, Settings, Upload, XCircle } from 'lucide-react';
+import type { FormEvent, KeyboardEvent, MouseEvent } from 'react';
+import { AlertCircle, CheckCircle2, Clock3, FileAudio, FolderOpen, Import, Library, Pencil, RefreshCw, Save, Search, Settings, Upload, X, XCircle } from 'lucide-react';
 import type { AIArtifact, AIArtifactTemplate, ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
@@ -27,6 +28,7 @@ export function App() {
     importFromDialog,
     importFromPaths,
     transcribeRecording,
+    editTranscriptSegment,
     generateArtifact,
     search,
     showLibrary,
@@ -135,6 +137,7 @@ export function App() {
             isGeneratingArtifact={selectedRecording ? Boolean(generatingArtifactIds[selectedRecording.id]) : false}
             onImport={() => void importFromDialog()}
             onTranscribe={(id) => void transcribeRecording(id)}
+            onEditTranscriptSegment={(recordingId, transcriptId, segmentId, text) => editTranscriptSegment(recordingId, transcriptId, segmentId, text)}
             onGenerateArtifact={(id, templateId) => void generateArtifact(id, templateId)}
           />
         )}
@@ -344,6 +347,7 @@ function RecordingDetailPane(props: {
   isGeneratingArtifact: boolean;
   onImport(): void;
   onTranscribe(id: string): void;
+  onEditTranscriptSegment(recordingId: string, transcriptId: string, segmentId: string, text: string): Promise<void>;
   onGenerateArtifact(id: string, templateId: string): void;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -392,13 +396,14 @@ function RecordingDetailPane(props: {
     );
   }
   const recording = props.recording;
+  const transcript = recording.transcript;
   const transcriptionJob = getLatestTranscriptionJob(recording);
   const transcriptionError = transcriptionJob?.state === 'failed' ? transcriptionJob : null;
   const isTranscribing = props.isTranscribing || transcriptionJob?.state === 'running';
   const aiJob = getLatestAIJob(recording);
   const aiError = aiJob?.state === 'failed' ? aiJob : null;
   const isGeneratingArtifact = props.isGeneratingArtifact || aiJob?.state === 'running';
-  const canGenerateArtifact = Boolean(recording.transcript) && !isTranscribing;
+  const canGenerateArtifact = Boolean(transcript) && !isTranscribing;
   const selectedTemplate = props.aiTemplates.find((template) => template.id === selectedTemplateId) ?? props.aiTemplates[0] ?? null;
   const effectiveTemplateId = selectedTemplate?.id ?? 'default-summary';
   const displayedArtifact = recording.artifacts.find((artifact) => artifact.id === selectedArtifactId) ?? recording.latestArtifact;
@@ -501,17 +506,17 @@ function RecordingDetailPane(props: {
             </div>
           ) : (
             <div className="mt-4">
-              <EmptySection text={recording.transcript ? 'AI 笔记尚未生成。点击 Generate Notes 可以基于当前 transcript 生成结构化笔记。' : '先完成转写后，才能生成 AI 笔记。'} />
+              <EmptySection text={transcript ? 'AI 笔记尚未生成。点击 Generate Notes 可以基于当前 transcript 生成结构化笔记。' : '先完成转写后，才能生成 AI 笔记。'} />
             </div>
           )}
         </section>
 
         <section data-testid="transcript-pane" className="stable-scrollbar min-w-0 overflow-y-scroll px-8 py-6">
           <SectionTitle title="Transcript" />
-          {recording.transcript?.segments.length ? (
+          {transcript?.segments.length ? (
             <div className="space-y-3">
               {isMockTranscript(recording) ? <MockTranscriptNotice /> : null}
-              {recording.transcript.segments.map((segment) => (
+              {transcript.segments.map((segment) => (
                 <TranscriptRow
                   key={segment.id}
                   segment={segment}
@@ -520,6 +525,7 @@ function RecordingDetailPane(props: {
                       void seekAudioToSegment(audioRef.current, recording.id, segment.startTime);
                     }
                   }}
+                  onSave={(text) => props.onEditTranscriptSegment(recording.id, transcript.id, segment.id, text)}
                 />
               ))}
             </div>
@@ -773,16 +779,104 @@ function isMockTranscript(recording: RecordingDetail): boolean {
   return recording.transcript?.provider === 'mock' || recording.transcript?.fullText.includes('这是第一阶段的模拟转写') === true;
 }
 
-function TranscriptRow(props: { segment: TranscriptSegment; onClick(): void }) {
+function TranscriptRow(props: { segment: TranscriptSegment; onClick(): void; onSave(text: string): Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(props.segment.text);
+  const [saving, setSaving] = useState(false);
+  const trimmedDraft = draft.trim();
+  const canSave = trimmedDraft.length > 0 && trimmedDraft !== props.segment.text.trim() && !saving;
+
+  useEffect(() => {
+    if (!editing) {
+      setDraft(props.segment.text);
+    }
+  }, [editing, props.segment.id, props.segment.text]);
+
+  async function handleSave(event: FormEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!canSave) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await props.onSave(trimmedDraft);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startEditing(event: MouseEvent) {
+    event.stopPropagation();
+    setDraft(props.segment.text);
+    setEditing(true);
+  }
+
+  function cancelEditing(event: MouseEvent) {
+    event.stopPropagation();
+    setDraft(props.segment.text);
+    setEditing(false);
+  }
+
+  function handleKeyDown(event: KeyboardEvent) {
+    if (editing) {
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      props.onClick();
+    }
+  }
+
   return (
-    <button
+    <div
       data-testid="transcript-row"
-      className="grid w-full grid-cols-[64px_1fr] gap-4 rounded px-2 py-2 text-left hover:bg-muted"
-      onClick={props.onClick}
+      className={cn(
+        'group grid w-full grid-cols-[64px_minmax(0,1fr)_32px] gap-4 rounded px-2 py-2 text-left hover:bg-muted',
+        editing && 'bg-muted/60'
+      )}
+      onClick={editing ? undefined : props.onClick}
+      onKeyDown={handleKeyDown}
+      role={editing ? undefined : 'button'}
+      tabIndex={editing ? undefined : 0}
     >
       <span className="text-xs tabular-nums text-muted-foreground">{formatTimestamp(props.segment.startTime)}</span>
-      <span className="text-sm leading-6">{props.segment.text}</span>
-    </button>
+      {editing ? (
+        <form className="min-w-0" onClick={(event) => event.stopPropagation()} onSubmit={(event) => void handleSave(event)}>
+          <textarea
+            data-testid="transcript-edit-textarea"
+            className="min-h-24 w-full resize-y rounded border border-input bg-background px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-ring"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            autoFocus
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <Button size="sm" type="submit" disabled={!canSave}>
+              <Save className="h-4 w-4" />
+              保存
+            </Button>
+            <Button size="icon" variant="ghost" type="button" title="Cancel edit" onClick={cancelEditing} disabled={saving}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <span className="min-w-0 text-sm leading-6">{props.segment.text}</span>
+      )}
+      <Button
+        className={cn('self-start opacity-0 group-hover:opacity-100 focus-visible:opacity-100', editing && 'invisible')}
+        size="icon"
+        variant="ghost"
+        type="button"
+        title="Edit transcript segment"
+        onClick={startEditing}
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }
 

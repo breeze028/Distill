@@ -43,6 +43,8 @@ async function main() {
   let watchFolderImported = false;
   let watchFolderAutoTranscribed = false;
   let watchFolderVisibleInLibrary = false;
+  let transcriptEditPersisted = false;
+  let transcriptEditSearchUpdated = false;
 
   try {
     const win = await app.firstWindow();
@@ -110,6 +112,19 @@ async function main() {
       const styles = window.getComputedStyle(element);
       return styles.overflowY === 'scroll' && styles.scrollbarGutter.includes('stable') && element.scrollHeight > element.clientHeight;
     });
+    const editableRow = win.getByTestId('transcript-row').filter({ hasText: '长音频滚动测试片段 5。' }).first();
+    await editableRow.hover();
+    await editableRow.getByTitle('Edit transcript segment').click();
+    await win.getByTestId('transcript-edit-textarea').fill('人工修正后的 transcript 片段。');
+    await win.getByRole('button', { name: '保存' }).click();
+    await win.getByText('人工修正后的 transcript 片段。').waitFor();
+    const detailAfterTranscriptEdit = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
+    transcriptEditPersisted = Boolean(
+      detailAfterTranscriptEdit.transcript?.fullText.includes('人工修正后的 transcript 片段。') &&
+      detailAfterTranscriptEdit.transcript?.segments.some((segment) => segment.text === '人工修正后的 transcript 片段。')
+    );
+    const editedSearchResults = await win.evaluate(() => window.distillAPI.searchRecordings('人工修正后的'));
+    transcriptEditSearchUpdated = editedSearchResults.some((recording) => recording.title === 'phase1-transcript-long-中文-test');
     const detailBeforeGenerate = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
     const previousAIJobId = detailBeforeGenerate.jobs.find((job) => job.kind === 'ai')?.id;
     await win.getByTestId('ai-template-select').selectOption('technical-thinking');
@@ -222,6 +237,8 @@ async function main() {
         watchFolderImported,
         watchFolderAutoTranscribed,
         watchFolderVisibleInLibrary,
+        transcriptEditPersisted,
+        transcriptEditSearchUpdated,
         hasLibraryText: text.includes('Voice Library'),
         hasDetailText: text.includes('phase1-transcript-long-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
@@ -264,6 +281,12 @@ async function main() {
   }
   if (!hasTranscriptScrollbar) {
     throw new Error('Expected the transcript pane to reserve a visible stable scrollbar.');
+  }
+  if (!transcriptEditPersisted) {
+    throw new Error('Expected manual transcript segment edit to persist in the latest transcript.');
+  }
+  if (!transcriptEditSearchUpdated) {
+    throw new Error('Expected transcript search to include the edited transcript text.');
   }
   if (!retranscribeStartedFresh) {
     throw new Error('Expected Retranscribe to create a fresh running transcription job.');
