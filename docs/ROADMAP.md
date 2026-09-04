@@ -113,11 +113,12 @@
 - 已增加 DeepSeek HTTP/响应/JSON schema 错误分类，并在失败 job 中保留 provider raw response。
 - 已在失败提示中以折叠方式展示 job 诊断详情，支持查看 JSON/schema 解析失败时的 raw response。
 - 已增加 Summary 区域模板选择 UI，并通过 Main IPC 只暴露 renderer-safe 的模板元数据。
+- 已在 Recording Detail 中返回完整 `AIArtifact` 历史，并在 Summary 区域支持多版本切换查看。
 
 下一步：
 
-- 保存并展示多次生成历史，而不只是最新 artifact。
 - 设计更细的重试策略，包括保留失败原因、重用模板和避免重复并发生成。
+- 改进 artifact history 的版本命名、模板筛选和删除策略。
 
 ## Phase 3：搜索与资料库体验
 

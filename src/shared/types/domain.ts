@@ -78,6 +78,7 @@ export type ProcessingJob = {
 export type RecordingDetail = RecordingListItem & {
   transcript: Transcript | null;
   latestArtifact: AIArtifact | null;
+  artifacts: AIArtifact[];
   jobs: ProcessingJob[];
 };
 

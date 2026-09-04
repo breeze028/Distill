@@ -51,6 +51,21 @@ describe('AIArtifactService', () => {
     expect(detail.latestArtifact?.content.summary).toContain('后台');
   });
 
+  it('keeps all generated AI artifacts in newest-first history', async () => {
+    const { repository, recordingId } = await createRecordingWithTranscript();
+    const service = new AIArtifactService(repository, new TemplateEchoLLM(), mockSettings());
+
+    await service.generateArtifact(recordingId, 'default-summary');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const detail = await service.generateArtifact(recordingId, 'technical-thinking');
+
+    expect(detail.latestArtifact?.templateId).toBe('technical-thinking');
+    expect(detail.artifacts.map((artifact) => artifact.templateId)).toEqual([
+      'technical-thinking',
+      'default-summary'
+    ]);
+  });
+
   it('requires a transcript before generating AI notes', async () => {
     const db = dbManager.open();
     const repository = new RecordingRepository(db);
@@ -110,6 +125,23 @@ class DelayedLLM implements LLMProvider {
         keyPoints: ['ProcessingJob running 状态可见'],
         todos: [],
         tags: ['background']
+      }
+    };
+  }
+}
+
+class TemplateEchoLLM implements LLMProvider {
+  readonly id = 'mock';
+
+  async generate(request: LLMRequest): Promise<LLMResponse> {
+    return {
+      rawResponse: `{"title":"${request.templateId}"}`,
+      content: {
+        title: request.templateId,
+        summary: `整理自 ${request.templateId}。`,
+        keyPoints: [request.templateId],
+        todos: [],
+        tags: [request.templateId]
       }
     };
   }

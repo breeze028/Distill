@@ -145,6 +145,7 @@ export class RecordingRepository {
       ...this.toListItem(row),
       transcript: this.getLatestTranscript(id),
       latestArtifact: this.getLatestArtifact(id),
+      artifacts: this.listArtifacts(id),
       jobs: this.listProcessingJobs(id)
     };
   }
@@ -411,15 +412,15 @@ export class RecordingRepository {
   }
 
   private getLatestArtifact(recordingId: string): AIArtifact | null {
-    const row = this.db
-      .prepare('SELECT * FROM ai_artifact WHERE recording_id = ? ORDER BY created_at DESC LIMIT 1')
-      .get(recordingId) as ArtifactRow | undefined;
+    return this.listArtifacts(recordingId)[0] ?? null;
+  }
 
-    if (!row) {
-      return null;
-    }
+  private listArtifacts(recordingId: string): AIArtifact[] {
+    const rows = this.db
+      .prepare('SELECT * FROM ai_artifact WHERE recording_id = ? ORDER BY created_at DESC')
+      .all(recordingId) as ArtifactRow[];
 
-    return {
+    return rows.map((row) => ({
       id: row.id,
       recordingId: row.recording_id,
       templateId: row.template_id,
@@ -429,7 +430,7 @@ export class RecordingRepository {
       content: aiArtifactContentSchema.parse(JSON.parse(row.content_json) as unknown),
       rawResponse: row.raw_response,
       createdAt: row.created_at
-    };
+    }));
   }
 
   private refreshSearchIndex(recordingId: string): void {
@@ -459,6 +460,7 @@ export class RecordingRepository {
       ...this.toListItem(row),
       transcript: this.getLatestTranscript(id),
       latestArtifact: this.getLatestArtifact(id),
+      artifacts: this.listArtifacts(id),
       jobs: this.listProcessingJobs(id)
     };
   }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock3, FileAudio, FolderOpen, Import, Library, RefreshCw, Search, Settings, Upload, XCircle } from 'lucide-react';
-import type { AIArtifactTemplate, ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment } from '@shared/types/domain';
+import type { AIArtifact, AIArtifactTemplate, ProcessingJob, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { cn } from '@renderer/lib/utils';
@@ -334,6 +334,7 @@ function RecordingDetailPane(props: {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [selectedTemplateId, setSelectedTemplateId] = useState('default-summary');
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!audioRef.current || !props.recording) {
@@ -358,6 +359,10 @@ function RecordingDetailPane(props: {
     }
   }, [props.recording?.id, props.recording?.latestArtifact?.templateId, props.aiTemplates]);
 
+  useEffect(() => {
+    setSelectedArtifactId(props.recording?.latestArtifact?.id ?? null);
+  }, [props.recording?.id, props.recording?.latestArtifact?.id]);
+
   if (!props.recording) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-8 text-center">
@@ -381,13 +386,14 @@ function RecordingDetailPane(props: {
   const canGenerateArtifact = Boolean(recording.transcript) && !isTranscribing;
   const selectedTemplate = props.aiTemplates.find((template) => template.id === selectedTemplateId) ?? props.aiTemplates[0] ?? null;
   const effectiveTemplateId = selectedTemplate?.id ?? 'default-summary';
+  const displayedArtifact = recording.artifacts.find((artifact) => artifact.id === selectedArtifactId) ?? recording.latestArtifact;
 
   return (
     <article className="flex h-full min-h-0 min-w-0 flex-col">
       <header className="border-b border-border px-8 py-5">
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-semibold leading-tight">{recording.latestArtifact?.content.title ?? recording.title}</h1>
+            <h1 className="truncate text-2xl font-semibold leading-tight">{displayedArtifact?.content.title ?? recording.title}</h1>
             <p className="mt-1 truncate text-sm text-muted-foreground">{recording.filePath}</p>
           </div>
           <div className="shrink-0 text-right text-sm text-muted-foreground">
@@ -466,11 +472,17 @@ function RecordingDetailPane(props: {
           ) : isGeneratingArtifact && aiJob ? (
             <AIProgressNotice job={aiJob} />
           ) : null}
-          {recording.latestArtifact ? (
+          {displayedArtifact ? (
             <div className="mt-4 space-y-6 text-sm leading-6">
-              <p>{recording.latestArtifact.content.summary}</p>
-              <NoteList title="Key Points" items={recording.latestArtifact.content.keyPoints} />
-              <NoteList title="Todos" items={recording.latestArtifact.content.todos} />
+              <p>{displayedArtifact.content.summary}</p>
+              <NoteList title="Key Points" items={displayedArtifact.content.keyPoints} />
+              <NoteList title="Todos" items={displayedArtifact.content.todos} />
+              <AIArtifactHistory
+                artifacts={recording.artifacts}
+                selectedId={displayedArtifact.id}
+                templates={props.aiTemplates}
+                onSelect={setSelectedArtifactId}
+              />
             </div>
           ) : (
             <div className="mt-4">
@@ -914,6 +926,46 @@ function NoteList(props: { title: string; items: string[] }) {
   );
 }
 
+function AIArtifactHistory(props: {
+  artifacts: AIArtifact[];
+  selectedId: string;
+  templates: AIArtifactTemplate[];
+  onSelect(id: string): void;
+}) {
+  if (props.artifacts.length <= 1) {
+    return null;
+  }
+
+  return (
+    <div data-testid="ai-artifact-history" className="border-t border-border pt-4">
+      <h3 className="mb-2 text-sm font-semibold">History</h3>
+      <div className="space-y-1">
+        {props.artifacts.map((artifact) => {
+          const selected = artifact.id === props.selectedId;
+          const template = props.templates.find((item) => item.id === artifact.templateId);
+          return (
+            <button
+              key={artifact.id}
+              className={cn(
+                'grid w-full grid-cols-[1fr_auto] gap-3 rounded px-2 py-2 text-left text-xs hover:bg-muted',
+                selected && 'bg-muted'
+              )}
+              aria-pressed={selected}
+              onClick={() => props.onSelect(artifact.id)}
+            >
+              <span className="min-w-0">
+                <span className="block truncate font-medium text-foreground">{artifact.content.title}</span>
+                <span className="block truncate text-muted-foreground">{template?.name ?? artifact.templateId}</span>
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">{formatShortDateTime(artifact.createdAt)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function EmptySection(props: { text: string }) {
   return <p className="max-w-[520px] text-sm leading-6 text-muted-foreground">{props.text}</p>;
 }
@@ -939,6 +991,15 @@ function formatTimestamp(seconds: number): string {
   const minutes = Math.floor(total / 60);
   const rest = total % 60;
   return `${minutes.toString().padStart(2, '0')}:${rest.toString().padStart(2, '0')}`;
+}
+
+function formatShortDateTime(input: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(input));
 }
 
 function formatFileSize(size: number): string {

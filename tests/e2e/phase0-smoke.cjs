@@ -34,6 +34,8 @@ async function main() {
   let retranscribeProgressVisible = false;
   let aiGenerationStartedFresh = false;
   let aiGenerationProgressVisible = false;
+  let aiArtifactHistoryPersisted = false;
+  let aiArtifactHistoryVisible = false;
 
   try {
     const win = await app.firstWindow();
@@ -98,6 +100,25 @@ async function main() {
       await waitForProcessingJob(win, imported.recording.id, runningAIJob.id, 30000);
     }
     await win.getByText('整理自 technical-thinking 模板的模拟 AI 笔记。').waitFor();
+    await win.getByTestId('ai-template-select').selectOption('personal-reflection');
+    const detailBeforeSecondGenerate = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
+    const previousSecondAIJobId = detailBeforeSecondGenerate.jobs.find((job) => job.kind === 'ai')?.id;
+    await win.getByRole('button', { name: 'Regenerate Notes' }).click();
+    await win.getByText(/Generating Notes · 00:0[0-3]/).waitFor();
+    const detailDuringSecondGenerate = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
+    const runningSecondAIJob = detailDuringSecondGenerate.jobs.find((job) => job.kind === 'ai' && job.state === 'running');
+    if (!runningSecondAIJob || runningSecondAIJob.id === previousSecondAIJobId) {
+      throw new Error('Expected Regenerate Notes to create a fresh running AI job.');
+    }
+    await waitForProcessingJob(win, imported.recording.id, runningSecondAIJob.id, 30000);
+    await win.getByText('整理自 personal-reflection 模板的模拟 AI 笔记。').waitFor();
+    await win.getByTestId('ai-artifact-history').getByText('技术思考').waitFor();
+    await win.getByTestId('ai-artifact-history').getByText('个人随想').waitFor();
+    aiArtifactHistoryVisible = true;
+    const detailAfterSecondGenerate = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
+    aiArtifactHistoryPersisted = detailAfterSecondGenerate.artifacts.length >= 2 &&
+      detailAfterSecondGenerate.latestArtifact?.templateId === 'personal-reflection' &&
+      detailAfterSecondGenerate.artifacts.some((artifact) => artifact.templateId === 'technical-thinking');
 
     const detailBeforeRetranscribe = await win.evaluate((id) => window.distillAPI.getRecording(id), imported.recording.id);
     const previousJobId = detailBeforeRetranscribe.jobs.find((job) => job.kind === 'transcription')?.id;
@@ -168,11 +189,13 @@ async function main() {
         retranscribeProgressVisible,
         aiGenerationStartedFresh,
         aiGenerationProgressVisible,
+        aiArtifactHistoryPersisted,
+        aiArtifactHistoryVisible,
         hasLibraryText: text.includes('Voice Library'),
         hasDetailText: text.includes('phase1-transcript-long-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
         autoTranscribedAfterImport: Boolean(imported.recording.jobs.find((job) => job.kind === 'transcription')),
-        hasGeneratedAIArtifact: text.includes('整理自 technical-thinking 模板的模拟 AI 笔记。'),
+        hasGeneratedAIArtifact: text.includes('整理自 personal-reflection 模板的模拟 AI 笔记。'),
         hasTranscriptText: text.includes('这是第一阶段的模拟转写'),
         hasPersistedTranscriptAfterReopen: reopenedText.includes('这是第一阶段的模拟转写')
       },
@@ -223,6 +246,12 @@ async function main() {
   if (!aiGenerationProgressVisible) {
     throw new Error('Expected Generate Notes progress to be visible immediately.');
   }
+  if (!aiArtifactHistoryPersisted) {
+    throw new Error('Expected multiple AI artifacts to be persisted in history.');
+  }
+  if (!aiArtifactHistoryVisible) {
+    throw new Error('Expected AI artifact history to be visible.');
+  }
   if (!appMenuRemoved) {
     throw new Error('Expected Electron application menu to be removed.');
   }
@@ -238,7 +267,7 @@ async function main() {
   if (!imported.recording.jobs.some((job) => job.kind === 'transcription')) {
     throw new Error('Expected import to start a transcription job automatically.');
   }
-  if (!text.includes('整理自 technical-thinking 模板的模拟 AI 笔记。')) {
+  if (!text.includes('整理自 personal-reflection 模板的模拟 AI 笔记。')) {
     throw new Error('Generated AI artifact summary was not visible.');
   }
   if (!text.includes('这是第一阶段的模拟转写')) {

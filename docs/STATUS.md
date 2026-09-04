@@ -74,6 +74,7 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - Recording Detail 的 Summary 区域已增加 Generate/Regenerate Notes 入口。
 - Summary 区域已增加 AI 模板选择，下拉只读取 Main 暴露的模板元数据，实际 prompt/schema 不进入 Renderer。
 - AI 笔记生成会创建 `ProcessingJob(kind='ai')`，运行中显示耗时，成功后写入 `AIArtifact`，失败后显示错误、诊断详情并可重试。
+- Recording Detail 已返回完整 `artifacts` 历史，Summary 区域可在多次生成结果之间切换查看。
 - DeepSeek provider 已增加基础错误分类：API Key/权限错误、频率或额度限制、服务端错误、响应缺失和 JSON/schema 错误。
 - AI 笔记生成失败时会把 provider raw response 写入 `ProcessingJob.errorDetail`，并在 UI 中以折叠诊断详情展示。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
@@ -130,6 +131,7 @@ pnpm dev
 - 点击 Generate Notes 会立即显示 AI 生成任务耗时
 - mock LLM 生成的 `AIArtifact` 可在详情页 Summary 区展示并持久化
 - 选择 `technical-thinking` 模板后生成 AI 笔记，mock 摘要确认使用对应 template id
+- 连续两次生成 AI 笔记后，详情页展示 artifact history，数据库保留两条历史并以最新版本作为默认展示
 - AI 生成任务成功/失败会写入 `ProcessingJob`
 - DeepSeek provider 错误分类、raw response 保留和失败诊断详情展示
 - LLM provider 选择默认使用 DeepSeek，mock LLM 只在显式测试/开发环境启用
@@ -148,7 +150,7 @@ pnpm dev
 - 旧版本已经生成的 mock/占位 transcript 不会被自动删除，需要用户点击 Retranscribe 生成真实内容。
 - DeepSeek provider 已接入生成主干并有 mock fetch 单测；真实 API smoke 仍需要通过本地密钥配置单独验证。
 - Watch Folder 只有设置入口和 Inbox 页面占位，尚未实现文件监听。
-- `ProcessingJob` 已覆盖 AI 笔记生成的基础状态流转；更细的 token/费用/重试策略尚未设计。
+- `ProcessingJob` 已覆盖 AI 笔记生成的基础状态流转；更细的 token/费用/模板级重试策略尚未设计。
 - Settings 中 API Key 暂存在 SQLite，未来需要替换为 Windows 安全存储方案。
 - Forge packaging 为了 Phase 0 中诊断 `better-sqlite3` 原生依赖，暂时关闭 `asar`。
 - 当前 UI 文案仍有较多英文，后续可以逐步中文化或引入轻量 i18n。
