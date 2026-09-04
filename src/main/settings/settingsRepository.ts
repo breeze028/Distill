@@ -23,7 +23,7 @@ export class SettingsRepository {
     return {
       aiProvider: normalizeAIProvider(values.aiProvider),
       deepSeekApiKeyConfigured: Boolean(values.deepSeekApiKey) || defaults.deepSeekApiKeyConfigured,
-      deepSeekModel: values.deepSeekModel ?? defaults.deepSeekModel,
+      deepSeekModel: normalizeDeepSeekModel(values.deepSeekModel),
       watchFolder: values.watchFolder ?? defaults.watchFolder,
       speechProvider: normalizeSpeechProvider(values.speechProvider),
       speechModel: values.speechModel ?? defaults.speechModel,
@@ -74,6 +74,13 @@ function normalizeAIProvider(value: string | undefined): string {
     return 'deepseek';
   }
   return value === 'deepseek' ? 'deepseek' : defaults.aiProvider;
+}
+
+function normalizeDeepSeekModel(value: string | undefined): string {
+  if (!value || value === 'deepseek-chat') {
+    return defaults.deepSeekModel;
+  }
+  return value;
 }
 
 function normalizeSpeechProvider(value: string | undefined): SpeechToTextProvider {

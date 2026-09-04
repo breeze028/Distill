@@ -72,6 +72,22 @@ describe('SettingsRepository', () => {
     repository = await createRepository();
     expect(repository.getSettings().aiProvider).toBe('mock');
   });
+
+  it('upgrades the legacy DeepSeek chat model to the current default', async () => {
+    const db = dbManager.open();
+    db.prepare('INSERT INTO app_setting (key, value, updated_at) VALUES (?, ?, ?)').run('deepSeekModel', 'deepseek-chat', new Date().toISOString());
+    const repository = await createRepository();
+
+    expect(repository.getSettings().deepSeekModel).toBe('deepseek-v4-flash');
+  });
+
+  it('keeps an explicitly configured DeepSeek model', async () => {
+    const db = dbManager.open();
+    db.prepare('INSERT INTO app_setting (key, value, updated_at) VALUES (?, ?, ?)').run('deepSeekModel', 'deepseek-v4-pro', new Date().toISOString());
+    const repository = await createRepository();
+
+    expect(repository.getSettings().deepSeekModel).toBe('deepseek-v4-pro');
+  });
 });
 
 async function createRepository() {
