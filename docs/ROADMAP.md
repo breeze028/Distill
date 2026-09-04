@@ -164,11 +164,12 @@
 - `WatchFolderService` 使用本地文件系统监听 M4A/MP3/WAV，并在文件稳定后调用现有 importer。
 - Watch Folder 导入会复用现有去重逻辑，并按 `autoTranscribeOnImport` 触发自动转写。
 - Inbox 页面显示 Watch Folder 状态、最近事件和错误信息。
+- Watch Folder 导入完成后会发送类型化 `library:changed` 通知，Renderer 收到后刷新 Library。
 
 下一步：
 
 - 增加导入队列视图，让用户看到 Watch Folder 最近导入了哪些文件。
-- 增加导入完成后的 Renderer 实时刷新或轻量通知。
+- 增加导入完成后的系统通知或非打扰式提示。
 - 增加更完整的文件稳定性策略，处理大文件复制、iCloud 同步和临时文件。
 
 ## Phase 5：稳定性、打包与数据安全

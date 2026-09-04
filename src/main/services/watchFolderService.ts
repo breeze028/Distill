@@ -9,6 +9,7 @@ import { logger } from '@main/logging/logger';
 type WatchFolderOptions = {
   debounceMs?: number;
   settleMs?: number;
+  onImported?: (recordingId: string) => void;
 };
 
 const supportedAudioExtensions = new Set(['.m4a', '.mp3', '.wav']);
@@ -25,6 +26,7 @@ export class WatchFolderService {
 
   private readonly debounceMs: number;
   private readonly settleMs: number;
+  private readonly onImported: ((recordingId: string) => void) | undefined;
 
   constructor(
     private readonly settings: SettingsRepository,
@@ -34,6 +36,7 @@ export class WatchFolderService {
   ) {
     this.debounceMs = options.debounceMs ?? 750;
     this.settleMs = options.settleMs ?? 750;
+    this.onImported = options.onImported;
   }
 
   getStatus(): WatchFolderStatus {
@@ -139,6 +142,9 @@ export class WatchFolderService {
       this.status.errorMessage = null;
       if (!result.wasDuplicate && this.settings.getSettings().autoTranscribeOnImport) {
         this.transcriber.startTranscription(result.recording.id);
+      }
+      if (!result.wasDuplicate) {
+        this.onImported?.(result.recording.id);
       }
     } catch (error) {
       this.status.errorMessage = error instanceof Error ? error.message : String(error);

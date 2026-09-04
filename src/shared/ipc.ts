@@ -11,6 +11,7 @@ export const ipcChannels = {
   recordingsStartAIGeneration: 'recordings:start-ai-generation',
   aiTemplatesList: 'ai-templates:list',
   recordingsSearch: 'recordings:search',
+  libraryChanged: 'library:changed',
   settingsGet: 'settings:get',
   settingsSave: 'settings:save',
   watchFolderStatus: 'watch-folder:status',
@@ -28,6 +29,7 @@ export type DistillApi = {
   startAIGeneration(recordingId: string, templateId?: string): Promise<RecordingDetail>;
   listAITemplates(): Promise<AIArtifactTemplate[]>;
   searchRecordings(query: string): Promise<RecordingListItem[]>;
+  onLibraryChanged(callback: () => void): () => void;
   getSettings(): Promise<AppSettings>;
   saveSettings(settings: SaveSettingsRequest): Promise<AppSettings>;
   getWatchFolderStatus(): Promise<WatchFolderStatus>;

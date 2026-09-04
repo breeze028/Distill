@@ -11,6 +11,7 @@ import { AIArtifactService } from '@main/services/aiArtifactService';
 import { WatchFolderService } from '@main/services/watchFolderService';
 import { SettingsRepository } from '@main/settings/settingsRepository';
 import { registerIpcHandlers } from '@main/ipc/registerIpc';
+import { ipcChannels } from '@shared/ipc';
 import { builtInTemplates } from '@main/llm/templates';
 import { DeepSeekProvider } from '@main/llm/deepSeekProvider';
 import { MockLLMProvider } from '@main/llm/mockProvider';
@@ -88,7 +89,9 @@ app.whenReady().then(() => {
     mock: new MockLLMProvider()
   });
   const aiArtifacts = new AIArtifactService(recordings, llm, settings);
-  watchFolderService = new WatchFolderService(settings, importer, transcriber);
+  watchFolderService = new WatchFolderService(settings, importer, transcriber, {
+    onImported: notifyLibraryChanged
+  });
 
   const recoveredJobCount = recordings.recoverInterruptedJobs();
   if (recoveredJobCount > 0) {
@@ -144,4 +147,10 @@ function registerAudioProtocol(): void {
 
     return net.fetch(pathToFileURL(recording.filePath).toString());
   });
+}
+
+function notifyLibraryChanged(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send(ipcChannels.libraryChanged);
+  }
 }

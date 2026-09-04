@@ -42,6 +42,7 @@ async function main() {
   let watchFolderRunning = false;
   let watchFolderImported = false;
   let watchFolderAutoTranscribed = false;
+  let watchFolderVisibleInLibrary = false;
 
   try {
     const win = await app.firstWindow();
@@ -83,6 +84,8 @@ async function main() {
       const watchedDetail = await waitForTranscript(win, watchedRecording.id, 30000);
       watchFolderAutoTranscribed = Boolean(watchedDetail.transcript?.segments.length);
     }
+    await win.getByText('watch-folder-auto').first().waitFor();
+    watchFolderVisibleInLibrary = true;
     rangedFetchStatus = await win.evaluate(async (recordingId) => {
       const response = await fetch(`distill-audio://recording/${recordingId}`, {
         headers: { Range: 'bytes=0-1' }
@@ -218,6 +221,7 @@ async function main() {
         watchFolderRunning,
         watchFolderImported,
         watchFolderAutoTranscribed,
+        watchFolderVisibleInLibrary,
         hasLibraryText: text.includes('Voice Library'),
         hasDetailText: text.includes('phase1-transcript-long-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
@@ -287,6 +291,9 @@ async function main() {
   }
   if (!watchFolderAutoTranscribed) {
     throw new Error('Expected watch folder import to start automatic transcription.');
+  }
+  if (!watchFolderVisibleInLibrary) {
+    throw new Error('Expected watch folder import to refresh the library UI.');
   }
   if (!appMenuRemoved) {
     throw new Error('Expected Electron application menu to be removed.');

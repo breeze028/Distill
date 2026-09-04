@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DatabaseManager } from '@main/database/database';
 import { RecordingRepository } from '@main/repositories/recordingRepository';
 import { SettingsRepository } from '@main/settings/settingsRepository';
@@ -30,7 +30,8 @@ describe('WatchFolderService', () => {
     const settings = new SettingsRepository(db);
     const importer = new FileImportService(recordings, async () => ({ duration: 5, format: 'M4A' }));
     const transcriber = new TranscriptionService(recordings, new MockSpeechToTextService());
-    const watchFolder = new WatchFolderService(settings, importer, transcriber, { debounceMs: 20, settleMs: 20 });
+    const onImported = vi.fn();
+    const watchFolder = new WatchFolderService(settings, importer, transcriber, { debounceMs: 20, settleMs: 20, onImported });
     const inboxPath = path.join(tmpDir, 'inbox');
     fs.mkdirSync(inboxPath);
     settings.saveSettings({ watchFolder: inboxPath, autoTranscribeOnImport: true });
@@ -44,6 +45,7 @@ describe('WatchFolderService', () => {
     expect(detail.title).toBe('自动导入');
     expect(detail.jobs.some((job) => job.kind === 'transcription')).toBe(true);
     expect(detail.transcript?.segments.length).toBeGreaterThan(0);
+    expect(onImported).toHaveBeenCalledWith(detail.id);
     expect(watchFolder.getStatus().lastEventAt).toBeTruthy();
     watchFolder.stop();
   });

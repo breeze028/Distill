@@ -42,6 +42,10 @@ export function App() {
     void load();
   }, [load]);
 
+  useEffect(() => window.distillAPI.onLibraryChanged(() => {
+    void load();
+  }), [load]);
+
   function handleDragEnter(event: React.DragEvent) {
     event.preventDefault();
     if (!hasDraggedFiles(event)) {
