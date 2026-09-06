@@ -90,7 +90,7 @@ describe('AIArtifactService', () => {
     const db = dbManager.open();
     const repository = new RecordingRepository(db);
     repository.ensureBuiltInTemplates([...builtInTemplates]);
-    const importer = new FileImportService(repository, async () => ({ duration: 8, format: 'M4A' }));
+    const importer = new FileImportService(repository, async () => ({ duration: 8, format: 'M4A' }), () => tmpDir);
     const filePath = path.join(tmpDir, '没有转写.m4a');
     fs.writeFileSync(filePath, Buffer.from('fake-audio'));
     const imported = await importer.importFile(filePath);
@@ -181,7 +181,7 @@ async function createRecordingWithTranscript() {
   const db = dbManager.open();
   const repository = new RecordingRepository(db);
   repository.ensureBuiltInTemplates([...builtInTemplates]);
-  const importer = new FileImportService(repository, async () => ({ duration: 8, format: 'M4A' }));
+  const importer = new FileImportService(repository, async () => ({ duration: 8, format: 'M4A' }), () => tmpDir);
   const filePath = path.join(tmpDir, '需要总结.m4a');
   fs.writeFileSync(filePath, Buffer.from('fake-audio'));
   const imported = await importer.importFile(filePath);

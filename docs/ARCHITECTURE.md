@@ -21,11 +21,13 @@ Main process 持有可信能力：文件系统、数据库、应用设置、音�
 
 Renderer 是 React UI，使用 Zustand 管理应用状态。Renderer 只能调用 preload 暴露的 `window.distillAPI`。
 
-拖拽导入时，Renderer 只读取浏览器 `File` 对象并调用 `window.distillAPI.getPathForFile`；本地路径解析由 Preload 通过 Electron `webUtils.getPathForFile` 完成，避免 Renderer 直接访问 Electron/Node API。
+拖拽导入时，Renderer 只读取浏览器 `File` 对象并调用 `window.distillAPI.getPathForFile`；本地路径解析由 Preload 通过 Electron `webUtils.getPathForFile` 完成，避免 Renderer 直接访问 Electron/Node API。Main 侧导入前会确保已配置音频库文件夹，并由 `FileImportService` 把外部音频复制进该文件夹后再写入 `Recording.file_path`。
 
 Calendar 视图通过 `recordings:get-calendar-month` 和 `recordings:list-by-date` 读取只读聚合数据。日期归类在 Main/repository 侧完成，优先使用 recording `created_at`，缺失时回退 `imported_at`，避免 Renderer 自行解释数据库时间字段。
 
 手动 Retranscribe 使用 `recordings:start-transcription` 立即创建后台 `ProcessingJob` 并返回最新 Recording，Renderer 通过轮询刷新任务状态；同步 `recordings:transcribe` 仍保留给测试和内部调用。
+
+Settings 中的音频库文件夹通过 `settings:select-audio-library-folder` 打开 Main 侧原生文件夹选择框。Renderer 只接收用户选择后的本地路径字符串，并在保存设置时通过 `settings:save` 更新存储和监听目录。该目录仍会被 Main 监听，用户直接放入目录的音频会自动出现在 Library。
 
 AI 笔记生成使用 `recordings:start-ai-generation`。Renderer 只提交 recording id 和 template id；Main 负责读取 Transcript、选择内置模板、调用 `LLMProvider`、写入 `AIArtifact`，并用 `ProcessingJob(kind='ai')` 记录状态。AI History 删除使用 `recordings:delete-ai-artifact`，Main 校验 artifact 属于当前 recording 后删除，并刷新最新 artifact 与 FTS 搜索索引。正常默认 provider 是 DeepSeek，自动化测试可显式启用 mock LLM。DeepSeek 响应解析失败时不会覆盖 Transcript；provider raw response 会保存在失败 job 的 `errorDetail` 中，用于后续诊断。
 

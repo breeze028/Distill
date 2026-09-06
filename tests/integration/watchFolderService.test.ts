@@ -24,22 +24,22 @@ afterEach(() => {
 });
 
 describe('WatchFolderService', () => {
-  it('imports new audio files from the configured watch folder and starts transcription', async () => {
+  it('imports new audio files from the configured audio library folder and starts transcription', async () => {
     const db = dbManager.open();
     const recordings = new RecordingRepository(db);
     const settings = new SettingsRepository(db);
-    const importer = new FileImportService(recordings, async () => ({ duration: 5, format: 'M4A' }));
+    const importer = new FileImportService(recordings, async () => ({ duration: 5, format: 'M4A' }), () => settings.getSettings().watchFolder);
     const transcriber = new TranscriptionService(recordings, new MockSpeechToTextService());
     const onImported = vi.fn();
     const watchFolder = new WatchFolderService(settings, importer, transcriber, { debounceMs: 20, settleMs: 20, onImported });
-    const inboxPath = path.join(tmpDir, 'inbox');
-    fs.mkdirSync(inboxPath);
-    settings.saveSettings({ watchFolder: inboxPath, autoTranscribeOnImport: true });
+    const audioLibraryPath = path.join(tmpDir, 'audio-library');
+    fs.mkdirSync(audioLibraryPath);
+    settings.saveSettings({ watchFolder: audioLibraryPath, autoTranscribeOnImport: true });
 
     const status = await watchFolder.refresh();
     expect(status.running).toBe(true);
 
-    fs.writeFileSync(path.join(inboxPath, '自动导入.m4a'), Buffer.from('fake-audio'));
+    fs.writeFileSync(path.join(audioLibraryPath, '自动导入.m4a'), Buffer.from('fake-audio'));
     const detail = await waitForImportedTranscript(recordings);
 
     expect(detail.title).toBe('自动导入');

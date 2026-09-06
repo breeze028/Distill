@@ -1,6 +1,6 @@
 # 长期计划
 
-最后更新：2026-09-03
+最后更新：2026-09-07
 
 本文档记录 Distill 的长期开发路线。它不是承诺所有功能一次完成，而是帮助后续 AI 开发始终知道项目下一步应该往哪里走。
 
@@ -136,7 +136,7 @@
 - 支持中文文件名、中文 transcript、中英文混合搜索
 - Library 列表显示 title、date、duration、processing state、tags
 - Calendar 视图按日期展示哪些天有录音，并能打开当天录音列表
-- 基础筛选：Inbox、Today、Work、Ideas、Life 等可以先用虚拟分类或 tag 实现
+- 基础筛选：Today、Work、Ideas、Life 等可以先用虚拟分类或 tag 实现
 - 录音详情页强化阅读体验
 
 验收重点：
@@ -151,36 +151,38 @@
 - 已新增 `recordings:get-calendar-month` 和 `recordings:list-by-date` IPC，Main 侧按 `createdAt ?? importedAt` 的本地日期聚合。
 - 点击日期会在 Calendar 主面板显示当天录音列表，点击录音会回到现有 Recording Detail。
 
-## Phase 4：Watch Folder
+## Phase 4：音频库文件夹
 
-目标：支持配置 Inbox 文件夹，并自动导入新音频。
+目标：支持配置统一的本地音频库文件夹；所有新导入音频都复制到该目录，直接放入该目录的音频也会自动进入 Library。
 
 范围：
 
-- Settings 配置 watch folder
-- Main process 监听文件夹
+- Settings 配置音频库文件夹
+- Main process 监听音频库文件夹
+- 手动导入、拖拽导入时复制音频副本到音频库文件夹
 - 避免重复导入
 - 处理文件尚未复制完成的情况
 - 记录导入 job 和错误
-- UI 显示 Inbox 状态
+- Settings 显示音频库文件夹状态
 
 验收重点：
 
-- 将 `.m4a` 放入 watch folder 后自动导入
+- 将 `.m4a` 放入音频库文件夹后自动导入
+- 从外部位置导入 `.m4a` 后，`Recording.filePath` 指向音频库文件夹内副本
 - 同一文件不会重复导入
 - 文件移动、删除、复制中断时错误可见但不破坏数据库
 
 当前已完成：
 
-- Settings 中的 Watch Folder 会驱动 Main 侧 `WatchFolderService` 刷新监听。
-- `WatchFolderService` 使用本地文件系统监听 M4A/MP3/WAV，并在文件稳定后调用现有 importer。
-- Watch Folder 导入会复用现有去重逻辑，并按 `autoTranscribeOnImport` 触发自动转写。
-- Inbox 页面显示 Watch Folder 状态、最近事件和错误信息。
-- Watch Folder 导入完成后会发送类型化 `library:changed` 通知，Renderer 收到后刷新 Library。
+- Settings 中的音频库文件夹会驱动 Main 侧文件夹监听刷新。
+- 文件夹监听使用本地文件系统监听 M4A/MP3/WAV，并在文件稳定后调用现有 importer。
+- 音频库文件夹自动导入会复用现有去重逻辑，并按 `autoTranscribeOnImport` 触发自动转写。
+- 音频库文件夹导入完成后会发送类型化 `library:changed` 通知，Renderer 收到后刷新 Library。
+- Settings 中的音频库文件夹已使用原生文件夹选择器，不要求用户手动输入路径字符串。
 
 下一步：
 
-- 增加导入队列视图，让用户看到 Watch Folder 最近导入了哪些文件。
+- 增加导入队列视图，让用户看到音频库文件夹最近导入了哪些文件。
 - 增加导入完成后的系统通知或非打扰式提示。
 - 增加更完整的文件稳定性策略，处理大文件复制、iCloud 同步和临时文件。
 

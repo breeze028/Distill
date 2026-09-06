@@ -8,6 +8,7 @@ async function main() {
   const exe = path.join(root, 'out', 'distill-win32-x64', 'distill.exe');
   const db = path.join(root, 'test-results', 'real-stt-ui.db');
   const audio = path.join(root, 'test-fixtures', '真实中文转写.m4a');
+  const audioLibraryDir = path.join(root, 'test-results', 'real-stt-audio-library');
   const python = process.env.DISTILL_PYTHON_COMMAND || path.join(root, 'python', '.venv', 'Scripts', 'python.exe');
 
   if (!fs.existsSync(exe)) {
@@ -23,7 +24,9 @@ async function main() {
   for (const suffix of ['', '-wal', '-shm']) {
     fs.rmSync(`${db}${suffix}`, { force: true });
   }
+  fs.rmSync(audioLibraryDir, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(db), { recursive: true });
+  fs.mkdirSync(audioLibraryDir, { recursive: true });
   const appEnv = { ...process.env, DISTILL_DB_PATH: db };
   delete appEnv.DISTILL_PYTHON_COMMAND;
 
@@ -39,7 +42,8 @@ async function main() {
     await win.evaluate(() => window.distillAPI.saveSettings({
       speechProvider: 'python',
       speechModel: 'faster-whisper-tiny',
-      autoTranscribeOnImport: true
+      autoTranscribeOnImport: true,
+      watchFolder: audioLibraryDir
     }));
     const status = await win.evaluate(() => window.distillAPI.getSpeechToTextStatus());
     if (!status.ready || status.pythonCommand === 'python') {

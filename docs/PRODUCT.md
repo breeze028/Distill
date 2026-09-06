@@ -6,7 +6,7 @@ Distill 是个人语音资料库、Transcript 阅读器和 AI 笔记工作区。
 
 ```text
 M4A
- -> 导入
+ -> 导入并复制到音频库文件夹
  -> 本地 Speech-to-Text
  -> 原始 Transcript
  -> AI Template
@@ -19,12 +19,12 @@ M4A
 
 ## 第一版页面
 
-- 资料库：录音列表、状态、日期、时长、导入操作、空状态。
+- 资料库：录音列表、状态、日期、时长、导入操作、空状态；所有新导入音频会复制到用户指定的音频库文件夹。
 - 日历：按录音创建日期展示哪些天有记录，并可查看当天录音。
 - 录音详情：音频播放器、summary 区域、transcript 区域。
 - Transcript 阅读器支持按 segment 人工修正文本，原始机器转写版本仍保留。
 - AI 笔记 History 可切换历史版本，并可右键删除不需要的生成结果。
-- 设置：STT model、DeepSeek provider 设置、watch folder 占位。
+- 设置：STT model、DeepSeek provider 设置、音频库文件夹选择。
 
 ## 暂不实现
 

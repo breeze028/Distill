@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { AIArtifactTemplate, AppSettings, ProcessingJobKind, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from '@shared/types/domain';
 
-type ViewMode = 'library' | 'calendar' | 'inbox' | 'settings';
+type ViewMode = 'library' | 'calendar' | 'settings';
 type CalendarMonth = { year: number; month: number };
 
 type LibraryState = {
@@ -38,7 +38,6 @@ type LibraryState = {
   showCalendar(): Promise<void>;
   loadCalendarMonth(year: number, month: number): Promise<void>;
   selectCalendarDate(date: string): Promise<void>;
-  showInbox(): Promise<void>;
   showSettings(): Promise<void>;
   saveSettings(settings: Parameters<typeof window.distillAPI.saveSettings>[0]): Promise<void>;
   refreshSpeechToTextStatus(): Promise<void>;
@@ -74,7 +73,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         window.distillAPI.listAITemplates(),
         window.distillAPI.getSettings(),
         window.distillAPI.getSpeechToTextStatus(),
-        window.distillAPI.getWatchFolderStatus()
+        window.distillAPI.getAudioLibraryFolderStatus()
       ]);
       const selected = get().selectedRecording;
       set({
@@ -302,32 +301,17 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     }
   },
 
-  async showInbox() {
-    const nextMode = get().viewMode === 'inbox' ? 'library' : 'inbox';
-    set({ viewMode: nextMode, error: null });
-    if (nextMode === 'inbox') {
-      try {
-        const [settings, watchFolderStatus] = await Promise.all([
-          window.distillAPI.getSettings(),
-          window.distillAPI.getWatchFolderStatus()
-        ]);
-        set({ settings, watchFolderStatus });
-      } catch (error) {
-        set({ error: toMessage(error) });
-      }
-    }
-  },
-
   async showSettings() {
     const nextMode = get().viewMode === 'settings' ? 'library' : 'settings';
     set({ viewMode: nextMode, error: null });
     if (nextMode === 'settings') {
       try {
-        const [settings, speechToTextStatus] = await Promise.all([
+        const [settings, speechToTextStatus, watchFolderStatus] = await Promise.all([
           window.distillAPI.getSettings(),
-          window.distillAPI.getSpeechToTextStatus()
+          window.distillAPI.getSpeechToTextStatus(),
+          window.distillAPI.getAudioLibraryFolderStatus()
         ]);
-        set({ settings, speechToTextStatus });
+        set({ settings, speechToTextStatus, watchFolderStatus });
       } catch (error) {
         set({ error: toMessage(error) });
       }
@@ -340,7 +324,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       const saved = await window.distillAPI.saveSettings(settings);
       const [speechToTextStatus, watchFolderStatus] = await Promise.all([
         window.distillAPI.getSpeechToTextStatus(),
-        window.distillAPI.getWatchFolderStatus()
+        window.distillAPI.getAudioLibraryFolderStatus()
       ]);
       set({ settings: saved, speechToTextStatus, watchFolderStatus });
     } catch (error) {

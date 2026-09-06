@@ -23,7 +23,7 @@ describe('recording import to transcript to AI artifact', () => {
   it('persists searchable recording data across the first pipeline stages', async () => {
     const db = dbManager.open();
     const repository = new RecordingRepository(db);
-    const importer = new FileImportService(repository, async () => ({ duration: 8, format: 'M4A' }));
+    const importer = new FileImportService(repository, async () => ({ duration: 8, format: 'M4A' }), () => tmpDir);
     const filePath = path.join(tmpDir, '技术想法.m4a');
     fs.writeFileSync(filePath, Buffer.from('fake-audio'));
 

@@ -24,7 +24,7 @@ afterEach(() => {
 describe('TranscriptionService', () => {
   it('writes transcript segments and marks jobs as succeeded', async () => {
     const repository = new RecordingRepository(dbManager.open());
-    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }));
+    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }), () => tmpDir);
     const filePath = path.join(tmpDir, '语音转写.m4a');
     fs.writeFileSync(filePath, Buffer.from('fake-audio'));
     const imported = await importer.importFile(filePath);
@@ -44,7 +44,7 @@ describe('TranscriptionService', () => {
 
   it('marks jobs as failed when STT fails', async () => {
     const repository = new RecordingRepository(dbManager.open());
-    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }));
+    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }), () => tmpDir);
     const filePath = path.join(tmpDir, '失败案例.m4a');
     fs.writeFileSync(filePath, Buffer.from('fake-audio'));
     const imported = await importer.importFile(filePath);
@@ -61,7 +61,7 @@ describe('TranscriptionService', () => {
 
   it('starts transcription in the background for import workflows', async () => {
     const repository = new RecordingRepository(dbManager.open());
-    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }));
+    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }), () => tmpDir);
     const filePath = path.join(tmpDir, '自动转写.m4a');
     fs.writeFileSync(filePath, Buffer.from('fake-audio'));
     const imported = await importer.importFile(filePath);
@@ -78,7 +78,7 @@ describe('TranscriptionService', () => {
 
   it('returns a fresh running job when retranscribing an existing transcript', async () => {
     const repository = new RecordingRepository(dbManager.open());
-    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }));
+    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }), () => tmpDir);
     const filePath = path.join(tmpDir, '重新转写.m4a');
     fs.writeFileSync(filePath, Buffer.from('fake-audio'));
     const imported = await importer.importFile(filePath);

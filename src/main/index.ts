@@ -78,7 +78,7 @@ app.whenReady().then(() => {
   const db = databaseManager.open();
   recordings = new RecordingRepository(db);
   const settings = new SettingsRepository(db);
-  const importer = new FileImportService(recordings);
+  const importer = new FileImportService(recordings, undefined, () => settings.getSettings().watchFolder);
   const speechToText = new SelectableSpeechToTextService(settings, {
     mock: new MockSpeechToTextService(),
     python: new PythonSpeechToTextService({ modelName: () => settings.getSettings().speechModel })

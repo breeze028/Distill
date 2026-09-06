@@ -25,6 +25,11 @@ export function registerIpcHandlers(dependencies: {
   ipcMain.handle(ipcChannels.recordingsGet, (_event, id: string) => dependencies.recordings.getRecording(id));
 
   async function importAndMaybeTranscribe(filePath: string): Promise<ImportRecordingResult> {
+    const audioLibraryFolder = await ensureAudioLibraryFolder();
+    if (!audioLibraryFolder) {
+      throw new Error('需要先选择音频库文件夹。');
+    }
+
     const result = await dependencies.importer.importFile(filePath);
     if (result.wasDuplicate || !dependencies.settings.getSettings().autoTranscribeOnImport) {
       return result;
@@ -97,7 +102,42 @@ export function registerIpcHandlers(dependencies: {
     return saved;
   });
 
-  ipcMain.handle(ipcChannels.watchFolderStatus, () => dependencies.watchFolder.getStatus());
+  ipcMain.handle(ipcChannels.settingsSelectAudioLibraryFolder, async () => {
+    return selectAudioLibraryFolder();
+  });
+
+  ipcMain.handle(ipcChannels.audioLibraryFolderStatus, () => dependencies.watchFolder.getStatus());
 
   ipcMain.handle(ipcChannels.sttStatus, () => dependencies.speechToText.getStatus());
+
+  async function ensureAudioLibraryFolder(): Promise<string | null> {
+    const currentWatchFolder = dependencies.settings.getSettings().watchFolder.trim();
+    if (currentWatchFolder) {
+      return currentWatchFolder;
+    }
+
+    const selectedFolder = await selectAudioLibraryFolder();
+    if (!selectedFolder) {
+      return null;
+    }
+
+    dependencies.settings.saveSettings({ watchFolder: selectedFolder });
+    await dependencies.watchFolder.refresh();
+    return selectedFolder;
+  }
+
+  async function selectAudioLibraryFolder(): Promise<string | null> {
+    const currentWatchFolder = dependencies.settings.getSettings().watchFolder.trim();
+    const result = await dialog.showOpenDialog({
+      title: 'Choose Audio Library Folder',
+      defaultPath: currentWatchFolder || undefined,
+      properties: ['openDirectory', 'createDirectory']
+    });
+
+    if (result.canceled || !result.filePaths[0]) {
+      return null;
+    }
+
+    return result.filePaths[0];
+  }
 }

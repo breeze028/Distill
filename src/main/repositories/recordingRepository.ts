@@ -128,6 +128,19 @@ export class RecordingRepository {
     return row ? this.getRecording(row.id) : null;
   }
 
+  findByNormalizedPath(normalizedPath: string): RecordingDetail | null {
+    const row = this.db
+      .prepare(
+        `SELECT id FROM recording
+         WHERE normalized_file_path = ?
+         ORDER BY imported_at DESC
+         LIMIT 1`
+      )
+      .get(normalizedPath) as { id: string } | undefined;
+
+    return row ? this.getRecording(row.id) : null;
+  }
+
   listRecordings(): RecordingListItem[] {
     const rows = this.db
       .prepare('SELECT * FROM recording ORDER BY imported_at DESC')

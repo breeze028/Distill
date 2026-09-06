@@ -64,7 +64,7 @@ export class WatchFolderService {
     try {
       const stats = await fs.promises.stat(folderPath);
       if (!stats.isDirectory()) {
-        this.status.errorMessage = 'Watch Folder 不是有效文件夹。';
+        this.status.errorMessage = '音频库文件夹不是有效文件夹。';
         return this.getStatus();
       }
 
@@ -80,15 +80,15 @@ export class WatchFolderService {
       this.watcher.on('error', (error) => {
         this.status.running = false;
         this.status.errorMessage = error.message;
-        logger.error('WatchFolder', 'Watcher failed', { folderPath, error: error.message });
+        logger.error('AudioLibraryFolder', 'Audio library folder watcher failed', { folderPath, error: error.message });
       });
 
       this.status.running = true;
-      logger.info('WatchFolder', 'Started watching folder', { folderPath });
+      logger.info('AudioLibraryFolder', 'Started watching audio library folder', { folderPath });
       await this.scanFolder(folderPath);
     } catch (error) {
       this.status.errorMessage = error instanceof Error ? error.message : String(error);
-      logger.warn('WatchFolder', 'Could not start watch folder', { folderPath, error: this.status.errorMessage });
+      logger.warn('AudioLibraryFolder', 'Could not start audio library folder watcher', { folderPath, error: this.status.errorMessage });
     }
 
     return this.getStatus();
@@ -109,7 +109,7 @@ export class WatchFolderService {
       }
     } catch (error) {
       this.status.errorMessage = error instanceof Error ? error.message : String(error);
-      logger.warn('WatchFolder', 'Could not scan watch folder', { folderPath, error: this.status.errorMessage });
+      logger.warn('AudioLibraryFolder', 'Could not scan audio library folder', { folderPath, error: this.status.errorMessage });
     }
   }
 
@@ -148,7 +148,7 @@ export class WatchFolderService {
       }
     } catch (error) {
       this.status.errorMessage = error instanceof Error ? error.message : String(error);
-      logger.warn('WatchFolder', 'Could not import watched file', { filePath, error: this.status.errorMessage });
+      logger.warn('AudioLibraryFolder', 'Could not import audio library file', { filePath, error: this.status.errorMessage });
     }
   }
 

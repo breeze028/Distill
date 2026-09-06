@@ -9,14 +9,14 @@ async function main() {
   const audio = path.join(root, 'test-results', 'phase1-transcript-long-中文-test.m4a');
   const db = path.join(root, 'test-results', 'phase0-ui.db');
   const exe = path.join(root, 'out', 'distill-win32-x64', 'distill.exe');
-  const watchDir = path.join(root, 'test-results', 'watch-folder');
+  const audioLibraryDir = path.join(root, 'test-results', 'audio-library');
 
   for (const suffix of ['', '-wal', '-shm']) {
     fs.rmSync(`${db}${suffix}`, { force: true });
   }
-  fs.rmSync(watchDir, { recursive: true, force: true });
+  fs.rmSync(audioLibraryDir, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(db), { recursive: true });
-  fs.mkdirSync(watchDir, { recursive: true });
+  fs.mkdirSync(audioLibraryDir, { recursive: true });
   ensureAudioFixture(fixtureAudio, 75);
   fs.rmSync(audio, { force: true });
   fs.copyFileSync(fixtureAudio, audio);
@@ -47,10 +47,13 @@ async function main() {
   let calendarDayVisible = false;
   let calendarDayDetailVisible = false;
   let calendarRecordingOpenedDetail = false;
-  let watchFolderRunning = false;
-  let watchFolderImported = false;
-  let watchFolderAutoTranscribed = false;
-  let watchFolderVisibleInLibrary = false;
+  let audioLibraryFolderPickerVisible = false;
+  let audioLibraryFolderManualInputRemoved = false;
+  let audioLibraryFolderRunning = false;
+  let importedCopiedToAudioLibrary = false;
+  let audioLibraryFolderImported = false;
+  let audioLibraryFolderAutoTranscribed = false;
+  let audioLibraryFolderVisibleInLibrary = false;
   let transcriptEditPersisted = false;
   let transcriptEditSearchUpdated = false;
 
@@ -59,11 +62,15 @@ async function main() {
     await win.waitForLoadState('domcontentloaded');
     await win.waitForTimeout(1000);
     appMenuRemoved = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null);
+    await win.evaluate((folder) => window.distillAPI.saveSettings({ watchFolder: folder }), audioLibraryDir);
+    const initialAudioLibraryStatus = await waitForAudioLibraryFolderStatus(win, 5000);
+    audioLibraryFolderRunning = initialAudioLibraryStatus.running;
 
     await dragImportRecording(win, audio);
     const droppedRecordings = await waitForRecordingCount(win, 1, 30000);
     const droppedRecording = await win.evaluate((id) => window.distillAPI.getRecording(id), droppedRecordings[0].id);
     imported = { recording: droppedRecording, wasDuplicate: false };
+    importedCopiedToAudioLibrary = isPathInsideDirectory(imported.recording.filePath, audioLibraryDir);
     await waitForTranscript(win, imported.recording.id, 30000);
     await win.evaluate(() => window.location.reload());
     await win.waitForLoadState('domcontentloaded');
@@ -92,29 +99,26 @@ async function main() {
     await win.getByRole('button', { name: 'Settings', exact: true }).click();
     await win.getByText('Speech-to-Text Model').waitFor();
     await win.getByText('Mock STT ready').waitFor();
+    await win.getByText('Audio Library Folder').waitFor();
+    audioLibraryFolderPickerVisible = await win.getByRole('button', { name: '选择文件夹' }).isVisible();
+    audioLibraryFolderManualInputRemoved = await win.getByTestId('watch-folder-field').getByRole('textbox').count() === 0;
     settingsText = await win.locator('body').innerText();
     await win.getByRole('button', { name: 'Settings', exact: true }).click();
     await win.getByText('phase1-transcript-long-中文-test').first().waitFor();
-    await win.getByRole('button', { name: 'Inbox' }).click();
-    await win.getByText('Watch Folder', { exact: true }).waitFor();
-    await win.getByRole('button', { name: 'Inbox' }).click();
-    await win.getByText('phase1-transcript-long-中文-test').first().waitFor();
-    await win.evaluate((folder) => window.distillAPI.saveSettings({ watchFolder: folder }), watchDir);
-    const watchStatus = await waitForWatchFolderStatus(win, 5000);
-    watchFolderRunning = watchStatus.running;
-    await win.getByRole('button', { name: 'Inbox' }).click();
-    await win.getByText('监听中').waitFor();
-    await win.getByRole('button', { name: 'Inbox' }).click();
-    fs.copyFileSync(audio, path.join(watchDir, 'watch-folder-auto.m4a'));
+    await expectNoInboxEntry(win);
+    fs.copyFileSync(audio, path.join(audioLibraryDir, 'audio-library-auto.m4a'));
     const watchedRecordings = await waitForRecordingCount(win, 2, 30000);
-    const watchedRecording = watchedRecordings.find((recording) => recording.title === 'watch-folder-auto');
-    watchFolderImported = Boolean(watchedRecording);
+    const watchedRecording = watchedRecordings.find((recording) => {
+      const fileName = path.basename(recording.filePath).toLowerCase();
+      return recording.originalFileName === 'audio-library-auto.m4a' || fileName === 'audio-library-auto.m4a';
+    });
+    audioLibraryFolderImported = Boolean(watchedRecording);
     if (watchedRecording) {
       const watchedDetail = await waitForTranscript(win, watchedRecording.id, 30000);
-      watchFolderAutoTranscribed = Boolean(watchedDetail.transcript?.segments.length);
+      audioLibraryFolderAutoTranscribed = Boolean(watchedDetail.transcript?.segments.length);
     }
-    await win.getByText('watch-folder-auto').first().waitFor();
-    watchFolderVisibleInLibrary = true;
+    await win.getByText('audio-library-auto').first().waitFor();
+    audioLibraryFolderVisibleInLibrary = true;
     rangedFetchStatus = await win.evaluate(async (recordingId) => {
       const response = await fetch(`distill-audio://recording/${recordingId}`, {
         headers: { Range: 'bytes=0-1' }
@@ -273,10 +277,13 @@ async function main() {
         calendarDayVisible,
         calendarDayDetailVisible,
         calendarRecordingOpenedDetail,
-        watchFolderRunning,
-        watchFolderImported,
-        watchFolderAutoTranscribed,
-        watchFolderVisibleInLibrary,
+        audioLibraryFolderPickerVisible,
+        audioLibraryFolderManualInputRemoved,
+        audioLibraryFolderRunning,
+        importedCopiedToAudioLibrary,
+        audioLibraryFolderImported,
+        audioLibraryFolderAutoTranscribed,
+        audioLibraryFolderVisibleInLibrary,
         transcriptEditPersisted,
         transcriptEditSearchUpdated,
         hasLibraryText: text.includes('Voice Library'),
@@ -296,7 +303,7 @@ async function main() {
     throw new Error('Expected first import not to be a duplicate.');
   }
   if (persisted.length < 2) {
-    throw new Error(`Expected at least two persisted recordings after watch folder import, got ${persisted.length}.`);
+    throw new Error(`Expected at least two persisted recordings after audio library folder import, got ${persisted.length}.`);
   }
   if (audioElementCount !== 1) {
     throw new Error(`Expected one audio element, got ${audioElementCount}.`);
@@ -361,17 +368,26 @@ async function main() {
   if (!calendarRecordingOpenedDetail) {
     throw new Error('Expected clicking a calendar day recording to open recording detail.');
   }
-  if (!watchFolderRunning) {
-    throw new Error('Expected watch folder to be running after saving settings.');
+  if (!audioLibraryFolderPickerVisible) {
+    throw new Error('Expected Settings to show an Audio Library Folder picker button.');
   }
-  if (!watchFolderImported) {
-    throw new Error('Expected watch folder to import a new audio file.');
+  if (!audioLibraryFolderManualInputRemoved) {
+    throw new Error('Expected Settings to avoid a manually editable Audio Library Folder text input.');
   }
-  if (!watchFolderAutoTranscribed) {
-    throw new Error('Expected watch folder import to start automatic transcription.');
+  if (!audioLibraryFolderRunning) {
+    throw new Error('Expected audio library folder watcher to be running after saving settings.');
   }
-  if (!watchFolderVisibleInLibrary) {
-    throw new Error('Expected watch folder import to refresh the library UI.');
+  if (!importedCopiedToAudioLibrary) {
+    throw new Error('Expected drag-and-drop import to copy the recording into the audio library folder.');
+  }
+  if (!audioLibraryFolderImported) {
+    throw new Error('Expected audio library folder watcher to import a new audio file.');
+  }
+  if (!audioLibraryFolderAutoTranscribed) {
+    throw new Error('Expected audio library folder import to start automatic transcription.');
+  }
+  if (!audioLibraryFolderVisibleInLibrary) {
+    throw new Error('Expected audio library folder import to refresh the library UI.');
   }
   if (!appMenuRemoved) {
     throw new Error('Expected Electron application menu to be removed.');
@@ -430,16 +446,28 @@ async function waitForRecordingCount(win, count, timeoutMs) {
   throw new Error(`Timed out waiting for ${count} recording(s), got ${recordings.length}.`);
 }
 
-async function waitForWatchFolderStatus(win, timeoutMs) {
+async function waitForAudioLibraryFolderStatus(win, timeoutMs) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    const status = await win.evaluate(() => window.distillAPI.getWatchFolderStatus());
+    const status = await win.evaluate(() => window.distillAPI.getAudioLibraryFolderStatus());
     if (status.running || status.errorMessage) {
       return status;
     }
     await win.waitForTimeout(250);
   }
-  return win.evaluate(() => window.distillAPI.getWatchFolderStatus());
+  return win.evaluate(() => window.distillAPI.getAudioLibraryFolderStatus());
+}
+
+async function expectNoInboxEntry(win) {
+  const inboxEntries = await win.getByRole('button', { name: 'Inbox' }).count();
+  if (inboxEntries !== 0) {
+    throw new Error(`Expected Inbox sidebar entry to be removed, got ${inboxEntries}.`);
+  }
+}
+
+function isPathInsideDirectory(filePath, directoryPath) {
+  const relativePath = path.relative(path.resolve(directoryPath), path.resolve(filePath));
+  return relativePath.length > 0 && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
 }
 
 function launchApp(exe, db) {

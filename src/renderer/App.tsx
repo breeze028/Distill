@@ -41,7 +41,6 @@ export function App() {
     showCalendar,
     loadCalendarMonth,
     selectCalendarDate,
-    showInbox,
     showSettings,
     saveSettings,
     refreshSpeechToTextStatus
@@ -114,7 +113,6 @@ export function App() {
         onImport={() => void importFromDialog()}
         onLibrary={showLibrary}
         onCalendar={() => void showCalendar()}
-        onInbox={() => void showInbox()}
         onSettings={() => void showSettings()}
         importing={importing}
       />
@@ -132,6 +130,7 @@ export function App() {
           <SettingsPane
             settings={settings}
             speechToTextStatus={speechToTextStatus}
+            watchFolderStatus={watchFolderStatus}
             checkingSpeechToText={checkingSpeechToText}
             onSave={(input) => void saveSettings(input)}
             onRefreshSpeechToText={() => void refreshSpeechToTextStatus()}
@@ -152,8 +151,6 @@ export function App() {
             onSelectDate={(date) => void selectCalendarDate(date)}
             onSelectRecording={(id) => void selectRecording(id)}
           />
-        ) : viewMode === 'inbox' ? (
-          <InboxPane settings={settings} watchFolderStatus={watchFolderStatus} onOpenSettings={() => void showSettings()} />
         ) : (
           <RecordingDetailPane
             recording={selectedRecording}
@@ -200,13 +197,12 @@ function getDroppedFilePath(file: File): string {
 
 function Sidebar(props: {
   query: string;
-  activeView: 'library' | 'calendar' | 'inbox' | 'settings';
+  activeView: 'library' | 'calendar' | 'settings';
   importing: boolean;
   onQueryChange(value: string): void;
   onImport(): void;
   onLibrary(): void;
   onCalendar(): void;
-  onInbox(): void;
   onSettings(): void;
 }) {
   return (
@@ -234,7 +230,6 @@ function Sidebar(props: {
       <nav className="mt-5 space-y-1">
         <SidebarItem icon={<Library className="h-4 w-4" />} label="Library" active={props.activeView === 'library'} onClick={props.onLibrary} />
         <SidebarItem icon={<CalendarDays className="h-4 w-4" />} label="Calendar" active={props.activeView === 'calendar'} onClick={props.onCalendar} />
-        <SidebarItem icon={<FolderOpen className="h-4 w-4" />} label="Inbox" active={props.activeView === 'inbox'} onClick={props.onInbox} />
         <SidebarItem icon={<Settings className="h-4 w-4" />} label="Settings" active={props.activeView === 'settings'} onClick={props.onSettings} />
       </nav>
 
@@ -242,40 +237,6 @@ function Sidebar(props: {
         Drop M4A, MP3, or WAV files anywhere in the window.
       </div>
     </aside>
-  );
-}
-
-function InboxPane(props: {
-  settings: ReturnType<typeof useLibraryStore.getState>['settings'];
-  watchFolderStatus: WatchFolderStatus | null;
-  onOpenSettings(): void;
-}) {
-  const watchFolder = props.settings?.watchFolder.trim();
-  const statusText = formatWatchFolderStatus(props.watchFolderStatus);
-
-  return (
-    <section className="h-full overflow-y-auto px-8 py-6">
-      <h1 className="text-2xl font-semibold">Inbox</h1>
-      <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-        Watch Folder 会在下一阶段接入自动监听。现在这里用于确认收件箱入口、显示当前配置，并为后续导入队列保留位置。
-      </p>
-
-      <div className="mt-8 max-w-2xl border-t border-border pt-5">
-        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Watch Folder</div>
-        <div className="mt-3 rounded border border-border bg-background px-3 py-2 text-sm">
-          {watchFolder ? watchFolder : '尚未配置'}
-        </div>
-        <div className="mt-3 grid gap-2 text-sm">
-          <StatusLine label="Status" value={statusText} />
-          {props.watchFolderStatus?.lastEventAt ? <StatusLine label="Last Event" value={formatShortDateTime(props.watchFolderStatus.lastEventAt)} /> : null}
-          {props.watchFolderStatus?.errorMessage ? <p className="text-sm leading-6 text-destructive">{props.watchFolderStatus.errorMessage}</p> : null}
-        </div>
-        <Button className="mt-4" variant="secondary" onClick={props.onOpenSettings}>
-          <Settings className="h-4 w-4" />
-          打开设置
-        </Button>
-      </div>
-    </section>
   );
 }
 
@@ -1020,6 +981,7 @@ function TranscriptRow(props: { segment: TranscriptSegment; onClick(): void; onS
 function SettingsPane(props: {
   settings: ReturnType<typeof useLibraryStore.getState>['settings'];
   speechToTextStatus: SpeechToTextStatus | null;
+  watchFolderStatus: WatchFolderStatus | null;
   checkingSpeechToText: boolean;
   onSave(input: Parameters<typeof window.distillAPI.saveSettings>[0]): void;
   onRefreshSpeechToText(): void;
@@ -1029,6 +991,7 @@ function SettingsPane(props: {
   const [speechProvider, setSpeechProvider] = useState(props.settings?.speechProvider ?? 'python');
   const [speechModel, setSpeechModel] = useState(props.settings?.speechModel ?? 'faster-whisper-tiny');
   const [autoTranscribeOnImport, setAutoTranscribeOnImport] = useState(props.settings?.autoTranscribeOnImport ?? true);
+  const [selectingWatchFolder, setSelectingWatchFolder] = useState(false);
   const [apiKey, setApiKey] = useState('');
 
   useEffect(() => {
@@ -1038,6 +1001,30 @@ function SettingsPane(props: {
     setSpeechModel(props.settings?.speechModel ?? 'faster-whisper-tiny');
     setAutoTranscribeOnImport(props.settings?.autoTranscribeOnImport ?? true);
   }, [props.settings]);
+
+  async function chooseWatchFolder() {
+    setSelectingWatchFolder(true);
+    try {
+      const selectedFolder = await window.distillAPI.selectAudioLibraryFolder();
+      if (selectedFolder) {
+        setWatchFolder(selectedFolder);
+        props.onSave(buildSettingsInput(selectedFolder));
+      }
+    } finally {
+      setSelectingWatchFolder(false);
+    }
+  }
+
+  function buildSettingsInput(nextWatchFolder = watchFolder): Parameters<typeof window.distillAPI.saveSettings>[0] {
+    return {
+      deepSeekModel: model,
+      speechProvider,
+      speechModel,
+      autoTranscribeOnImport,
+      watchFolder: nextWatchFolder,
+      ...(apiKey ? { deepSeekApiKey: apiKey } : {})
+    };
+  }
 
   return (
     <section className="h-full overflow-y-auto px-8 py-6">
@@ -1089,10 +1076,35 @@ function SettingsPane(props: {
         <Field label={props.settings?.deepSeekApiKeyConfigured ? 'DeepSeek API Key Configured' : 'DeepSeek API Key'}>
           <Input type="password" value={apiKey} placeholder={props.settings?.deepSeekApiKeyConfigured ? 'Leave blank to keep existing key' : 'Stored in the main process database'} onChange={(event) => setApiKey(event.target.value)} />
         </Field>
-        <Field label="Watch Folder">
-          <Input value={watchFolder} placeholder="D:\\VoiceInbox" onChange={(event) => setWatchFolder(event.target.value)} />
-        </Field>
-        <Button onClick={() => props.onSave({ deepSeekModel: model, speechProvider, speechModel, autoTranscribeOnImport, watchFolder, ...(apiKey ? { deepSeekApiKey: apiKey } : {}) })}>
+        <div data-testid="watch-folder-field" className="block">
+          <div className="mb-2 text-sm font-medium">Audio Library Folder</div>
+          <div className="flex items-center gap-2">
+            <div
+              data-testid="watch-folder-path"
+              className={cn(
+                'flex h-9 min-w-0 flex-1 items-center rounded border border-input bg-surface px-3 text-sm',
+                !watchFolder && 'text-muted-foreground'
+              )}
+            >
+              <span className="truncate">{watchFolder || '尚未选择文件夹'}</span>
+            </div>
+            <Button type="button" variant="secondary" onClick={() => void chooseWatchFolder()} disabled={selectingWatchFolder}>
+              <FolderOpen className="h-4 w-4" />
+              选择文件夹
+            </Button>
+            {watchFolder ? (
+              <Button type="button" variant="ghost" size="icon" title="Clear Audio Library Folder" onClick={() => setWatchFolder('')}>
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
+          <div className="mt-3 grid gap-2 text-sm">
+            <StatusLine label="Status" value={formatAudioLibraryFolderStatus(props.watchFolderStatus)} />
+            {props.watchFolderStatus?.lastEventAt ? <StatusLine label="Last Event" value={formatShortDateTime(props.watchFolderStatus.lastEventAt)} /> : null}
+            {props.watchFolderStatus?.errorMessage ? <p className="text-sm leading-6 text-destructive">{props.watchFolderStatus.errorMessage}</p> : null}
+          </div>
+        </div>
+        <Button onClick={() => props.onSave(buildSettingsInput())}>
           Save Settings
         </Button>
       </div>
@@ -1156,7 +1168,7 @@ function formatSpeechStatus(status: SpeechToTextStatus | null): string {
   return status.ready ? 'Python worker ready' : 'Setup required';
 }
 
-function formatWatchFolderStatus(status: WatchFolderStatus | null): string {
+function formatAudioLibraryFolderStatus(status: WatchFolderStatus | null): string {
   if (!status || !status.folderPath) {
     return '未配置';
   }

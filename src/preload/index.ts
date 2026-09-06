@@ -23,7 +23,8 @@ const api: DistillApi = {
   },
   getSettings: () => ipcRenderer.invoke(ipcChannels.settingsGet),
   saveSettings: (settings) => ipcRenderer.invoke(ipcChannels.settingsSave, settings),
-  getWatchFolderStatus: () => ipcRenderer.invoke(ipcChannels.watchFolderStatus),
+  selectAudioLibraryFolder: () => ipcRenderer.invoke(ipcChannels.settingsSelectAudioLibraryFolder),
+  getAudioLibraryFolderStatus: () => ipcRenderer.invoke(ipcChannels.audioLibraryFolderStatus),
   getSpeechToTextStatus: () => ipcRenderer.invoke(ipcChannels.sttStatus)
 };
 

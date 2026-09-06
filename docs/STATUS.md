@@ -1,6 +1,6 @@
 # 完成情况
 
-最后更新：2026-09-03
+最后更新：2026-09-07
 
 本文档记录当前已经完成的内容、验证情况、已知限制和推荐下一步。每次完成较大阶段或明显改变架构/核心流程后，都应该更新本文档。
 
@@ -28,8 +28,8 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - 建立数据库 migration 基础设施。
 - 创建 Python Worker 基础目录与占位 worker。
 - 创建 `Recording`、`Transcript`、`TranscriptSegment`、`AIArtifact`、`AITemplate`、`Tag`、`RecordingTag`、`ProcessingJob`、`AppSetting` 初始 schema。
-- 实现 `.m4a`、`.mp3`、`.wav` 手动导入。
-- 实现窗口级拖拽导入 `.m4a`、`.mp3`、`.wav`，支持一次拖入多个音频文件。
+- 实现 `.m4a`、`.mp3`、`.wav` 手动导入；新导入音频会复制到用户指定的音频库文件夹。
+- 实现窗口级拖拽导入 `.m4a`、`.mp3`、`.wav`，支持一次拖入多个音频文件，并复用音频库文件夹复制规则。
 - 导入后保存原始文件名、路径、导入时间、时长、大小、创建时间和格式。
 - 实现重复导入检测。
 - 实现 Library 列表。
@@ -39,12 +39,11 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - `distill-audio://` 支持 byte range 响应，保证播放器 seek 后可以从目标位置读取音频数据。
 - 实现基础播放器、播放速度选择、详情页 summary/transcript 空状态。
 - 实现 Settings 页面基础字段。
-- 实现 Inbox 页面占位入口。
 - 移除 Electron 默认原生菜单栏，避免顶部 File/Edit/View 菜单造成焦点问题。
-- 修复 Sidebar navigation：Library、Inbox、Settings 可以切换，Inbox/Settings 再点一次可收回。
-- Watch Folder 已有第一版 Main 侧监听服务：保存文件夹后自动监听 M4A/MP3/WAV，发现新音频后导入，并按设置触发自动转写。
-- Inbox 页面已显示 Watch Folder 路径、监听状态、最近事件时间和错误信息。
-- Watch Folder 导入完成后会通过类型化 `library:changed` 通知刷新 Library UI。
+- 删除用户可见 Inbox 入口，Library 直接承担音频资料库功能。
+- 音频库文件夹已有第一版 Main 侧监听服务：保存文件夹后自动监听 M4A/MP3/WAV，发现新音频后导入，并按设置触发自动转写。
+- Settings 中的音频库文件夹使用原生文件夹选择器配置，避免手动输入本地路径字符串，并显示监听状态、最近事件时间和错误信息。
+- 音频库文件夹导入完成后会通过类型化 `library:changed` 通知刷新 Library UI。
 - 新增 `TranscriptionService`。
 - 新增 `recordings:transcribe` IPC。
 - 新增手动触发转写按钮。
@@ -152,8 +151,9 @@ pnpm dev
 - 转写运行中 UI 可显示 elapsed time
 - audio element 加载到有效时长
 - Electron application menu 已移除
-- Inbox 和 Settings 可打开/收回
-- 保存 Watch Folder 后状态显示为监听中；复制新 `.m4a` 到监听文件夹会自动导入、触发转写并刷新 Library UI
+- Sidebar 不再显示 Inbox；Settings 可打开/收回
+- 保存音频库文件夹后状态显示为监听中；复制新 `.m4a` 到该文件夹会自动导入、触发转写并刷新 Library UI
+- Settings 中音频库文件夹区域显示文件夹选择按钮，并且不再暴露可手动输入的路径文本框
 
 ## 当前已知限制
 
@@ -161,7 +161,7 @@ pnpm dev
 - `small`/`medium` 模型在 CPU 上可能明显慢于 `tiny`/`base`；`medium` 首次下载或纯 CPU 转写时可能进入很长等待，短录音默认建议使用 `tiny` 或 `base`。
 - 旧版本已经生成的 mock/占位 transcript 不会被自动删除，需要用户点击 Retranscribe 生成真实内容。
 - DeepSeek provider 已接入生成主干并有 mock fetch 单测；真实 API smoke 仍需要通过本地密钥配置单独验证。
-- Watch Folder 已有本地监听、自动导入和导入后 Library 刷新第一版；尚未实现系统通知、队列视图和文件稳定性高级策略。
+- 音频库文件夹已有本地监听、自动导入和导入后 Library 刷新第一版；尚未实现系统通知、队列视图和文件稳定性高级策略。
 - `ProcessingJob` 已覆盖 AI 笔记生成的基础状态流转；更细的 token/费用/模板级重试策略尚未设计。
 - Settings 中 API Key 暂存在 SQLite，未来需要替换为 Windows 安全存储方案。
 - Forge packaging 为了 Phase 0 中诊断 `better-sqlite3` 原生依赖，暂时关闭 `asar`。

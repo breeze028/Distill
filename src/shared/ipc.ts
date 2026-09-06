@@ -18,7 +18,8 @@ export const ipcChannels = {
   libraryChanged: 'library:changed',
   settingsGet: 'settings:get',
   settingsSave: 'settings:save',
-  watchFolderStatus: 'watch-folder:status',
+  settingsSelectAudioLibraryFolder: 'settings:select-audio-library-folder',
+  audioLibraryFolderStatus: 'audio-library-folder:status',
   sttStatus: 'stt:status'
 } as const;
 
@@ -40,7 +41,8 @@ export type DistillApi = {
   onLibraryChanged(callback: () => void): () => void;
   getSettings(): Promise<AppSettings>;
   saveSettings(settings: SaveSettingsRequest): Promise<AppSettings>;
-  getWatchFolderStatus(): Promise<WatchFolderStatus>;
+  selectAudioLibraryFolder(): Promise<string | null>;
+  getAudioLibraryFolderStatus(): Promise<WatchFolderStatus>;
   getSpeechToTextStatus(): Promise<SpeechToTextStatus>;
 };
 
