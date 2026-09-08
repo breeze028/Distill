@@ -26,6 +26,7 @@ async function main() {
   const app = await launchApp(exe, db, assetDir);
   const rendererErrors = [];
   let recordingSourceOpened = false;
+  let recordingSourceSeeked = false;
   let noteSourceOpened = false;
   let persistedConversation = false;
   let layout1366Ok = false;
@@ -53,7 +54,7 @@ async function main() {
 
     const imported = await win.evaluate((filePath) => window.distillAPI.importRecordingFromPath(filePath), audio);
     const transcriptDetail = await waitForTranscript(win, imported.recording.id, 30000);
-    const firstSegment = transcriptDetail.transcript.segments[0];
+    const sourceSegment = transcriptDetail.transcript.segments[1] ?? transcriptDetail.transcript.segments[0];
     await win.evaluate(({ recordingId, transcriptId, segmentId }) => window.distillAPI.editTranscriptSegment({
       recordingId,
       transcriptId,
@@ -62,7 +63,7 @@ async function main() {
     }), {
       recordingId: imported.recording.id,
       transcriptId: transcriptDetail.transcript.id,
-      segmentId: firstSegment.id
+      segmentId: sourceSegment.id
     });
     const note = await win.evaluate(() => window.distillAPI.createNote({ title: '摄影计划' }));
     await win.evaluate((noteId) => window.distillAPI.updateNote({
@@ -167,6 +168,11 @@ async function main() {
     await win.getByTestId('assistant-source').filter({ hasText: 'assistant-weekend' }).first().click();
     await win.getByRole('button', { name: 'Retranscribe' }).waitFor();
     recordingSourceOpened = await win.getByText('assistant-weekend').first().isVisible();
+    await win.waitForFunction((startTime) => {
+      const audio = document.querySelector('audio');
+      return Boolean(audio?.currentSrc.includes(`#t=${startTime.toFixed(3)}`)) && audio.currentTime >= Math.max(0, startTime - 0.5);
+    }, sourceSegment.startTime, { timeout: 5000 });
+    recordingSourceSeeked = true;
 
     await win.getByText('摄影计划').first().click();
     await win.getByTitle('New assistant conversation').click();
@@ -191,6 +197,7 @@ async function main() {
 
   console.log(JSON.stringify({
     recordingSourceOpened,
+    recordingSourceSeeked,
     noteSourceOpened,
     persistedConversation,
     layout1366Ok,
@@ -223,6 +230,9 @@ async function main() {
   }
   if (!recordingSourceOpened) {
     throw new Error('Expected clicking a recording Assistant source to open the recording detail.');
+  }
+  if (!recordingSourceSeeked) {
+    throw new Error('Expected clicking a transcript Assistant source to seek audio to its segment time.');
   }
   if (!noteSourceOpened) {
     throw new Error('Expected clicking a note Assistant source to open the note detail.');

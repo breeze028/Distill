@@ -103,7 +103,7 @@ Read-only Personal Reflection Agent 当前目标：在不改变核心资料库�
 - 新增 `agent_conversation` / `agent_message` 表，Assistant 多轮对话可以持久化；Agent run 不塞进 `ProcessingJob`。
 - Assistant tools 当前支持 `search_library`、`get_recording`、`get_transcript`、`get_note`、`list_library_by_date_range`，全部只读，参数经过 Zod validation，并由程序维护 structured Sources。
 - Renderer 新增 `src/renderer/features/assistant/` 和 `assistantStore`，`App.tsx` 只负责打开/关闭、scope 和 source navigation 集成。
-- UI 新增可收起右侧 Ask Distill 面板，支持 All Library 和 Current Item scope，显示回答、sources 和运行 activity；点击 recording/note source 可打开对应详情。
+- UI 新增可收起右侧 Ask Distill 面板，支持 All Library 和 Current Item scope，显示回答、sources 和运行 activity；点击 note source 可打开笔记，点击 recording source 可打开录音，若 source 带 transcript segment 时间则会滚到对应片段并 seek 音频。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -183,9 +183,9 @@ pnpm dev
 - packaged app 中 Calendar 可显示笔记所在日期，并可从当天列表打开笔记
 - packaged app 中点击笔记空白编辑区域可聚焦并输入；smoke 捕获 renderer error，确认 New Note 不产生白屏异常
 - Agent Runtime / ToolRegistry 单测覆盖：unknown tool、Zod validation、tool error、no tool final answer、单次 tool call、多轮 sequential tool call、maxSteps 和 source collection。
-- Agent tools 集成测试使用真实 SQLite + Repository 覆盖录音 transcript 搜索、文本 note 搜索读取，以及 Current Item scope 限制。
+- Agent tools 集成测试使用真实 SQLite + Repository 覆盖录音 transcript 搜索、segment source 时间戳、文本 note 搜索读取，以及 Current Item scope 限制。
 - DeepSeekAgentModel 使用 mock fetch 验证 tool calling 请求体、`tool_calls` 解析、usage 映射和错误分类，不调用真实 DeepSeek。
-- Assistant packaged Electron smoke 覆盖：打开 Ask Distill、mock Agent 回答、显示 Sources、点击 Recording Source 打开录音、点击 Note Source 打开笔记、对话持久化、1366x768/1920x1080 open layout、closed layout 和 renderer error 捕获。
+- Assistant packaged Electron smoke 覆盖：打开 Ask Distill、mock Agent 回答、显示 Sources、点击 Recording Source 打开录音并 seek 到 transcript segment、点击 Note Source 打开笔记、对话持久化、1366x768/1920x1080 open layout、closed layout、Assistant 全屏/拖拽调整宽度、主 Sidebar/Library 边界拖拽调整宽度、Enter 发送、Shift/Alt+Enter 换行和 renderer error 捕获。
 
 ## 当前已知限制
 
@@ -200,20 +200,21 @@ pnpm dev
 - 当前 UI 文案仍有较多英文，后续可以逐步中文化或引入轻量 i18n。
 - 当前 Playwright smoke 是脚本形式，还不是完整 Playwright test suite。
 - Assistant 第一版仍使用 SQLite FTS5 字面检索，不包含 semantic search、embedding 或 vector database；中文多词拆分召回仍受当前 FTS/fallback 策略限制。
-- Assistant 第一版 source 点击至少打开 Recording/Note；精确跳转 transcript segment 和 audio seek 的 source navigation 数据结构已预留，但 UI 尚未完成深跳转。
+- Assistant source navigation 已支持 recording/note 打开；recording source 若包含 transcript `segmentId/startTime`，会滚动到对应 transcript 行并 seek 音频。
 - Assistant 第一版没有 streaming；运行中只显示简化 activity，不展示 chain-of-thought。
 - 文本编辑器目前是基础富文本能力，不包含完整 Word 级分页、样式管理、表格、图片缩放裁剪和复杂导出。
 
 ## 下一步建议
 
-继续推进 Assistant 的检索质量与 source navigation，同时保持 read-only 边界。
+继续推进 Assistant 的检索质量，同时保持 read-only 边界。
 
 优先任务：
 
-- 增加 transcript segment source 的 UI 深跳转和 audio seek。
 - 观察 SQLite FTS5 在真实中文资料库中的召回，再决定是否设计 semantic search。
+- 为 semantic search 先写设计草案：embedding 存储位置、重建策略、隐私边界、模型可替换接口和回退到 FTS5 的混合检索策略。
 - 设计 Write Tools + Human Confirmation，不在第一版直接实现写入。
 
 ## 重要提交
 
 - `381e03c feat: initialize Distill desktop app`
+- `7fca3a8 feat: add reflection assistant and resizable panes`

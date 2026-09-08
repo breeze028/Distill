@@ -8,7 +8,7 @@ import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import Underline from '@tiptap/extension-underline';
 import { AlertCircle, Bold, Bot, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Code2, Clock3, FileAudio, FileText, FolderOpen, Heading1, Heading2, Image as ImageIcon, Import, Italic, Library, Link2, List, ListChecks, ListOrdered, Minus, Pencil, Plus, Quote, Redo2, RefreshCw, Save, Search, Settings, Strikethrough, Trash2, Underline as UnderlineIcon, Undo2, Upload, X, XCircle } from 'lucide-react';
-import type { AgentScope, AIArtifact, AIArtifactTemplate, LibraryCalendarDay, LibraryItem, NoteDetail, ProcessingJob, RecordingDetail, RecordingListItem, RichTextDocument, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
+import type { AgentScope, AgentSource, AIArtifact, AIArtifactTemplate, LibraryCalendarDay, LibraryItem, NoteDetail, ProcessingJob, RecordingDetail, RecordingListItem, RichTextDocument, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { cn } from '@renderer/lib/utils';
@@ -76,6 +76,7 @@ function AppShell() {
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [libraryPaneWidth, setLibraryPaneWidth] = useState(420);
   const [resizingPane, setResizingPane] = useState<'sidebar' | 'library' | null>(null);
+  const [pendingTranscriptSeek, setPendingTranscriptSeek] = useState<PendingTranscriptSeek | null>(null);
   const dragDepth = useRef(0);
   const paneResize = useRef<{
     pane: 'sidebar' | 'library';
@@ -178,6 +179,19 @@ function AppShell() {
     document.body.style.userSelect = '';
     document.body.style.cursor = '';
     setResizingPane(null);
+  }
+
+  function openAssistantRecordingSource(source: Extract<AgentSource, { kind: 'recording' }>) {
+    if (source.startTime !== undefined) {
+      setPendingTranscriptSeek({
+        recordingId: source.recordingId,
+        segmentId: source.segmentId,
+        startTime: source.startTime
+      });
+    } else {
+      setPendingTranscriptSeek(null);
+    }
+    void selectRecording(source.recordingId);
   }
 
   return (
@@ -286,6 +300,8 @@ function AppShell() {
             importing={importing}
             isTranscribing={selectedRecording ? Boolean(transcribingIds[selectedRecording.id]) : false}
             isGeneratingArtifact={selectedRecording ? Boolean(generatingArtifactIds[selectedRecording.id]) : false}
+            pendingTranscriptSeek={selectedRecording && pendingTranscriptSeek?.recordingId === selectedRecording.id ? pendingTranscriptSeek : null}
+            onPendingTranscriptSeekHandled={() => setPendingTranscriptSeek(null)}
             onImport={() => void importFromDialog()}
             onCreateNote={() => void createNote()}
             onTranscribe={(id) => void transcribeRecording(id)}
@@ -300,13 +316,19 @@ function AppShell() {
           scope={assistantScope}
           scopeLabel={assistantScopeLabel}
           onClose={() => setAssistantOpen(false)}
-          onOpenRecording={(id) => void selectRecording(id)}
+          onOpenRecording={openAssistantRecordingSource}
           onOpenNote={(id) => void selectNote(id)}
         />
       ) : null}
     </div>
   );
 }
+
+type PendingTranscriptSeek = {
+  recordingId: string;
+  segmentId?: string;
+  startTime: number;
+};
 
 function DropOverlay() {
   return (
@@ -1058,6 +1080,8 @@ function RecordingDetailPane(props: {
   importing: boolean;
   isTranscribing: boolean;
   isGeneratingArtifact: boolean;
+  pendingTranscriptSeek: PendingTranscriptSeek | null;
+  onPendingTranscriptSeekHandled(): void;
   onImport(): void;
   onCreateNote(): void;
   onTranscribe(id: string): void;
@@ -1066,6 +1090,7 @@ function RecordingDetailPane(props: {
   onDeleteAIArtifact(recordingId: string, artifactId: string): Promise<void>;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const transcriptRowRefs = useRef(new Map<string, HTMLDivElement>());
   const [playbackRate, setPlaybackRate] = useState(1);
   const [selectedTemplateId, setSelectedTemplateId] = useState('default-summary');
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
@@ -1096,6 +1121,30 @@ function RecordingDetailPane(props: {
   useEffect(() => {
     setSelectedArtifactId(props.recording?.latestArtifact?.id ?? null);
   }, [props.recording?.id, props.recording?.latestArtifact?.id]);
+
+  useEffect(() => {
+    const pending = props.pendingTranscriptSeek;
+    if (!pending || !props.recording || pending.recordingId !== props.recording.id) {
+      return;
+    }
+
+    const segment = pending.segmentId
+      ? props.recording.transcript?.segments.find((item) => item.id === pending.segmentId)
+      : null;
+    const row = segment ? transcriptRowRefs.current.get(segment.id) : null;
+    row?.scrollIntoView({ block: 'center' });
+
+    if (audioRef.current) {
+      void seekAudioToSegment(audioRef.current, props.recording.id, pending.startTime);
+    }
+    props.onPendingTranscriptSeekHandled();
+  }, [
+    props.pendingTranscriptSeek?.recordingId,
+    props.pendingTranscriptSeek?.segmentId,
+    props.pendingTranscriptSeek?.startTime,
+    props.recording?.id,
+    props.recording?.transcript?.id
+  ]);
 
   if (!props.recording) {
     return (
@@ -1242,6 +1291,13 @@ function RecordingDetailPane(props: {
                 <TranscriptRow
                   key={segment.id}
                   segment={segment}
+                  rowRef={(node) => {
+                    if (node) {
+                      transcriptRowRefs.current.set(segment.id, node);
+                    } else {
+                      transcriptRowRefs.current.delete(segment.id);
+                    }
+                  }}
                   onClick={() => {
                     if (audioRef.current) {
                       void seekAudioToSegment(audioRef.current, recording.id, segment.startTime);
@@ -1501,7 +1557,7 @@ function isMockTranscript(recording: RecordingDetail): boolean {
   return recording.transcript?.provider === 'mock' || recording.transcript?.fullText.includes('这是第一阶段的模拟转写') === true;
 }
 
-function TranscriptRow(props: { segment: TranscriptSegment; onClick(): void; onSave(text: string): Promise<void> }) {
+function TranscriptRow(props: { segment: TranscriptSegment; rowRef?: (node: HTMLDivElement | null) => void; onClick(): void; onSave(text: string): Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(props.segment.text);
   const [saving, setSaving] = useState(false);
@@ -1555,7 +1611,9 @@ function TranscriptRow(props: { segment: TranscriptSegment; onClick(): void; onS
 
   return (
     <div
+      ref={props.rowRef}
       data-testid="transcript-row"
+      data-segment-id={props.segment.id}
       className={cn(
         'group grid w-full grid-cols-[64px_minmax(0,1fr)_32px] gap-4 rounded px-2 py-2 text-left hover:bg-muted',
         editing && 'bg-muted/60'

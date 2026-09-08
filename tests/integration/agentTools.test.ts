@@ -52,7 +52,13 @@ describe('Agent library tools', () => {
     const result = await registry.execute('search_library', { query: '周末', kind: 'all', limit: 5 }, { scope: { kind: 'all' } });
 
     expect(result.ok).toBe(true);
-    expect(result.sources[0]).toMatchObject({ kind: 'recording', recordingId: recording.id });
+    expect(result.sources[0]).toMatchObject({
+      kind: 'recording',
+      recordingId: recording.id,
+      startTime: 0,
+      snippet: '这个周末很无聊，不知道做什么。'
+    });
+    expect(result.sources[0]).toHaveProperty('segmentId');
     expect(result.content).toContain('weekend');
   });
 

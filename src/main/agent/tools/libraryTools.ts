@@ -263,16 +263,16 @@ function applyScopeToDateRange(
 
 function recordingSearchResult(recordings: RecordingRepository, item: RecordingListItem, query: string) {
   const detail = recordings.getRecording(item.id);
-  const snippet = detail ? bestRecordingSnippet(detail, query) : item.originalFileName;
+  const match = detail ? bestRecordingMatch(detail, query) : { snippet: item.originalFileName, segment: null };
   return {
     kind: 'recording' as const,
     id: item.id,
     title: item.title,
     date: recordingDate(item),
     duration: item.duration,
-    snippet,
+    snippet: match.snippet,
     sortAt: item.createdAt ?? item.importedAt,
-    source: recordingSource(item, snippet)
+    source: recordingSource(item, match.snippet, match.segment ?? undefined)
   };
 }
 
@@ -291,23 +291,67 @@ function noteSearchResult(notes: NoteRepository, item: NoteListItem, query: stri
   };
 }
 
-function bestRecordingSnippet(recording: RecordingDetail, query: string): string {
-  return bestSnippet([
-    recording.transcript?.fullText ?? '',
-    recording.latestArtifact?.content.summary ?? '',
-    ...(recording.latestArtifact?.content.keyPoints ?? []),
-    ...(recording.latestArtifact?.content.todos ?? []),
-    recording.originalFileName
-  ], query);
+function bestRecordingMatch(recording: RecordingDetail, query: string): { snippet: string; segment: TranscriptSegment | null } {
+  const segment = bestTranscriptSegment(recording.transcript?.segments ?? [], query);
+  if (segment) {
+    return { snippet: segment.text, segment };
+  }
+
+  return {
+    snippet: bestSnippet([
+      recording.transcript?.fullText ?? '',
+      recording.latestArtifact?.content.summary ?? '',
+      ...(recording.latestArtifact?.content.keyPoints ?? []),
+      ...(recording.latestArtifact?.content.todos ?? []),
+      recording.originalFileName
+    ], query),
+    segment: null
+  };
+}
+
+function bestTranscriptSegment(segments: TranscriptSegment[], query: string): TranscriptSegment | null {
+  const terms = searchTerms(query);
+  if (segments.length === 0 || terms.length === 0) {
+    return null;
+  }
+
+  let best: { segment: TranscriptSegment; score: number } | null = null;
+  for (const segment of segments) {
+    const text = segment.text.toLocaleLowerCase();
+    const score = terms.reduce((total, term) => total + (text.includes(term) ? term.length : 0), 0);
+    if (score > 0 && (!best || score > best.score)) {
+      best = { segment, score };
+    }
+  }
+
+  return best?.segment ?? null;
 }
 
 function bestSnippet(texts: string[], query: string): string {
   const text = texts.find((item) => item.trim().length > 0)?.replace(/\s+/g, ' ').trim() ?? '';
-  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const terms = searchTerms(query);
   const lower = text.toLocaleLowerCase();
   const index = terms.length ? terms.map((term) => lower.indexOf(term)).find((position) => position >= 0) ?? 0 : 0;
   const start = Math.max(0, index - 80);
   return text.slice(start, start + 260);
+}
+
+function searchTerms(query: string): string[] {
+  const normalized = query
+    .toLocaleLowerCase()
+    .replace(/[^\p{Letter}\p{Number}]+/gu, ' ');
+  const terms = normalized.split(/\s+/).filter((term) => term.length >= 2);
+  const cjkChunks = query.toLocaleLowerCase().match(/\p{Script=Han}{2,}/gu) ?? [];
+  for (const chunk of cjkChunks) {
+    if (chunk.length <= 12) {
+      terms.push(chunk);
+    }
+    for (let index = 0; index < chunk.length - 1; index += 1) {
+      terms.push(chunk.slice(index, index + 2));
+    }
+  }
+
+  return [...new Set(terms)].sort((left, right) => right.length - left.length);
 }
 
 function transcriptPreview(text: string): string {

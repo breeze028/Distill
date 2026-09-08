@@ -9,7 +9,7 @@ export function AssistantPanel(props: {
   scope: AgentScope;
   scopeLabel: string;
   onClose(): void;
-  onOpenRecording(id: string): void;
+  onOpenRecording(source: Extract<AgentSource, { kind: 'recording' }>): void;
   onOpenNote(id: string): void;
 }) {
   const {
@@ -243,7 +243,7 @@ function AssistantEmptyState() {
 
 function AssistantMessage(props: {
   message: AgentConversationMessage;
-  onOpenRecording(id: string): void;
+  onOpenRecording(source: Extract<AgentSource, { kind: 'recording' }>): void;
   onOpenNote(id: string): void;
 }) {
   const isUser = props.message.role === 'user';
@@ -265,7 +265,7 @@ function AssistantMessage(props: {
 
 function AgentSourceList(props: {
   sources: AgentSource[];
-  onOpenRecording(id: string): void;
+  onOpenRecording(source: Extract<AgentSource, { kind: 'recording' }>): void;
   onOpenNote(id: string): void;
 }) {
   return (
@@ -277,7 +277,7 @@ function AgentSourceList(props: {
             key={sourceKey(source)}
             data-testid="assistant-source"
             className="grid w-full grid-cols-[18px_minmax(0,1fr)] gap-2 rounded px-2 py-2 text-left hover:bg-muted"
-            onClick={() => source.kind === 'recording' ? props.onOpenRecording(source.recordingId) : props.onOpenNote(source.noteId)}
+            onClick={() => source.kind === 'recording' ? props.onOpenRecording(source) : props.onOpenNote(source.noteId)}
           >
             {source.kind === 'recording' ? <FileAudio className="mt-0.5 h-4 w-4 text-accent" /> : <FileText className="mt-0.5 h-4 w-4 text-muted-foreground" />}
             <span className="min-w-0">
