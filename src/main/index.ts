@@ -6,18 +6,27 @@ import started from 'electron-squirrel-startup';
 import { DatabaseManager } from '@main/database/database';
 import { RecordingRepository } from '@main/repositories/recordingRepository';
 import { NoteRepository } from '@main/repositories/noteRepository';
+import { AgentConversationRepository } from '@main/repositories/agentConversationRepository';
 import { FileImportService } from '@main/services/fileImportService';
 import { TranscriptionService } from '@main/services/transcriptionService';
 import { AIArtifactService } from '@main/services/aiArtifactService';
+import { AgentService } from '@main/services/agentService';
 import { WatchFolderService } from '@main/services/watchFolderService';
 import { NoteAssetService } from '@main/services/noteAssetService';
 import { SettingsRepository } from '@main/settings/settingsRepository';
 import { registerIpcHandlers } from '@main/ipc/registerIpc';
+import { registerAssistantIpcHandlers } from '@main/ipc/registerAssistantIpc';
 import { ipcChannels } from '@shared/ipc';
 import { builtInTemplates } from '@main/llm/templates';
 import { DeepSeekProvider } from '@main/llm/deepSeekProvider';
 import { MockLLMProvider } from '@main/llm/mockProvider';
 import { SelectableLLMProvider } from '@main/llm/selectableLLMProvider';
+import { DeepSeekAgentModel } from '@main/agent/models/deepSeekAgentModel';
+import { MockAgentModel } from '@main/agent/models/mockAgentModel';
+import { SelectableAgentModel } from '@main/agent/models/selectableAgentModel';
+import { AgentRuntime } from '@main/agent/runtime';
+import { ToolRegistry } from '@main/agent/tools/toolRegistry';
+import { createLibraryTools } from '@main/agent/tools/libraryTools';
 import { logger } from '@main/logging/logger';
 import { MockSpeechToTextService } from '@main/stt/mockSpeechToTextService';
 import { PythonSpeechToTextService } from '@main/stt/pythonSpeechToTextService';
@@ -89,6 +98,7 @@ app.whenReady().then(() => {
   const db = databaseManager.open();
   recordings = new RecordingRepository(db);
   const notes = new NoteRepository(db);
+  const agentConversations = new AgentConversationRepository(db);
   noteAssets = new NoteAssetService(process.env.DISTILL_ASSET_DIR ?? path.join(app.getPath('userData'), 'assets'));
   const settings = new SettingsRepository(db);
   const importer = new FileImportService(recordings, undefined, () => settings.getSettings().watchFolder);
@@ -101,6 +111,13 @@ app.whenReady().then(() => {
     deepseek: new DeepSeekProvider(() => settings.getSecret('deepSeekApiKey')),
     mock: new MockLLMProvider()
   });
+  const agentModel = new SelectableAgentModel(settings, {
+    deepseek: new DeepSeekAgentModel(() => settings.getSecret('deepSeekApiKey')),
+    mock: new MockAgentModel()
+  });
+  const agentTools = new ToolRegistry(createLibraryTools(recordings, notes));
+  const agentRuntime = new AgentRuntime(agentModel, agentTools, { maxSteps: 8 });
+  const agent = new AgentService(agentConversations, agentRuntime, settings);
   const aiArtifacts = new AIArtifactService(recordings, llm, settings);
   watchFolderService = new WatchFolderService(settings, importer, transcriber, {
     onImported: notifyLibraryChanged
@@ -112,6 +129,7 @@ app.whenReady().then(() => {
   }
   recordings.ensureBuiltInTemplates([...builtInTemplates]);
   registerIpcHandlers({ recordings, notes, noteAssets, importer, transcriber, aiArtifacts, settings, speechToText, watchFolder: watchFolderService });
+  registerAssistantIpcHandlers({ agent });
   void watchFolderService.refresh();
   registerAudioProtocol();
   registerAssetProtocol();

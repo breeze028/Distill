@@ -10,6 +10,7 @@ React Renderer
       -> 文件导入
       -> 设置与密钥
       -> LLM provider
+      -> Read-only Agent runtime
       -> Python STT worker
 ```
 
@@ -35,6 +36,12 @@ Settings 中的音频库文件夹通过 `settings:select-audio-library-folder` �
 
 AI 笔记生成使用 `recordings:start-ai-generation`。Renderer 只提交 recording id 和 template id；Main 负责读取 Transcript、选择内置模板、调用 `LLMProvider`、写入 `AIArtifact`，并用 `ProcessingJob(kind='ai')` 记录状态。AI History 删除使用 `recordings:delete-ai-artifact`，Main 校验 artifact 属于当前 recording 后删除，并刷新最新 artifact 与 FTS 搜索索引。正常默认 provider 是 DeepSeek，自动化测试可显式启用 mock LLM。DeepSeek 响应解析失败时不会覆盖 Transcript；provider raw response 会保存在失败 job 的 `errorDetail` 中，用于后续诊断。
 
+Assistant 使用独立的 read-only Agent 边界，不复用 `LLMProvider.generate()` 承载 messages/tools/tool_calls。Main 侧组合 `AgentConversationRepository`、`DeepSeekAgentModel` / `MockAgentModel`、`ToolRegistry`、Library read-only tools、`AgentRuntime` 和 `AgentService`。`AgentModel` 只负责 `messages + tools -> assistant response / tool calls / usage`；它不知道 SQLite、Repository、Tool execution 或 conversation persistence。`AgentRuntime` 负责最多 8 步的 agent loop、tool execution、source collection、结构化 trace 和 stop condition。
+
+Assistant tools 当前保持 5 个只读数据访问工具：`search_library`、`get_recording`、`get_transcript`、`get_note`、`list_library_by_date_range`。工具参数使用 Zod validation，工具由 `ToolRegistry` 按名称查找和执行，未知工具、参数错误和工具异常都会变成结构化 tool result。Current Item scope 会限制工具只读取当前 Recording 或当前 Note；All Library scope 才能访问全部资料库。
+
+Assistant conversation 通过 `agent_conversation` 和 `agent_message` 表持久化，关闭应用后仍可恢复历史对话。Assistant run 不写入 `ProcessingJob`；trace 只记录可观察的 model/tool step、工具名、参数、耗时、成功/失败和 token usage，不记录 API Key、Authorization header 或模型 private chain-of-thought。回答相关来源由程序维护为结构化 `AgentSource[]`，Renderer 只负责展示紧凑 source rows 并点击打开对应 Recording 或 Note。
+
 ## 数据库
 
 初始 schema 包含：
@@ -51,6 +58,8 @@ AI 笔记生成使用 `recordings:start-ai-generation`。Renderer 只提交 reco
 - `recording_fts`
 - `note`
 - `note_fts`
+- `agent_conversation`
+- `agent_message`
 
 数据库 migration 位于 `src/main/database/migrations`。
 
@@ -61,6 +70,8 @@ AI 笔记生成使用 `recordings:start-ai-generation`。Renderer 只提交 reco
 搜索使用 SQLite FTS5。录音索引字段包括标题、转写文本、AI 内容和标签。
 
 文本笔记使用独立的 `note_fts` 索引标题与纯文本正文。Library 搜索在 Main 侧合并录音搜索结果和笔记搜索结果，再按对应资料的最近更新时间排序返回。Calendar 聚合也在 Main 侧合并录音与笔记，返回数量、类型拆分和录音总时长。
+
+Assistant 第一阶段继续复用 SQLite FTS5 和现有 Repository 搜索能力，不引入 embedding、vector database 或 semantic search。工具返回面向 Agent 的受限摘要、片段和 metadata，避免一次 tool call 把超长 transcript 全部塞进模型上下文。
 
 ## 音频播放
 

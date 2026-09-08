@@ -89,6 +89,18 @@ export class NoteRepository {
       .map(toListItem);
   }
 
+  listNotesByDateRange(startDate: string, endDate: string, limit = 50): NoteListItem[] {
+    const rows = this.db.prepare('SELECT * FROM note').all() as NoteRow[];
+    return rows
+      .filter((row) => {
+        const date = noteDateKey(row);
+        return date >= startDate && date <= endDate;
+      })
+      .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
+      .slice(0, Math.max(1, Math.min(limit, 100)))
+      .map(toListItem);
+  }
+
   getNote(id: string): NoteDetail | null {
     const row = this.db.prepare('SELECT * FROM note WHERE id = ?').get(id) as NoteRow | undefined;
     return row ? toDetail(row) : null;
@@ -166,6 +178,21 @@ export class NoteRepository {
       rowsById.set(row.id, row);
     }
     return [...rowsById.values()].map(toListItem);
+  }
+
+  searchWithinNote(noteId: string, query: string): boolean {
+    const note = this.getNote(noteId);
+    if (!note) {
+      return false;
+    }
+
+    const searchableText = [note.title, note.plainText].join('\n').toLocaleLowerCase();
+    return query
+      .trim()
+      .toLocaleLowerCase()
+      .split(/\s+/)
+      .filter(Boolean)
+      .some((part) => searchableText.includes(part));
   }
 
   private refreshSearchIndex(noteId: string): void {

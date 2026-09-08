@@ -37,7 +37,10 @@ const api: DistillApi = {
   saveSettings: (settings) => ipcRenderer.invoke(ipcChannels.settingsSave, settings),
   selectAudioLibraryFolder: () => ipcRenderer.invoke(ipcChannels.settingsSelectAudioLibraryFolder),
   getAudioLibraryFolderStatus: () => ipcRenderer.invoke(ipcChannels.audioLibraryFolderStatus),
-  getSpeechToTextStatus: () => ipcRenderer.invoke(ipcChannels.sttStatus)
+  getSpeechToTextStatus: () => ipcRenderer.invoke(ipcChannels.sttStatus),
+  listAssistantConversations: () => ipcRenderer.invoke(ipcChannels.assistantListConversations),
+  getAssistantConversation: (input) => ipcRenderer.invoke(ipcChannels.assistantGetConversation, input),
+  runAssistant: (input) => ipcRenderer.invoke(ipcChannels.assistantRun, input)
 };
 
 contextBridge.exposeInMainWorld('distillAPI', api);

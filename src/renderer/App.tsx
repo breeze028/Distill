@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState } from 'react';
-import type { FormEvent, KeyboardEvent, MouseEvent } from 'react';
+import type { FormEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { EditorContent, useEditor, type Editor, type JSONContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -7,12 +7,14 @@ import Link from '@tiptap/extension-link';
 import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import Underline from '@tiptap/extension-underline';
-import { AlertCircle, Bold, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Code2, Clock3, FileAudio, FileText, FolderOpen, Heading1, Heading2, Image as ImageIcon, Import, Italic, Library, Link2, List, ListChecks, ListOrdered, Minus, Pencil, Plus, Quote, Redo2, RefreshCw, Save, Search, Settings, Strikethrough, Trash2, Underline as UnderlineIcon, Undo2, Upload, X, XCircle } from 'lucide-react';
-import type { AIArtifact, AIArtifactTemplate, LibraryCalendarDay, LibraryItem, NoteDetail, ProcessingJob, RecordingDetail, RecordingListItem, RichTextDocument, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
+import { AlertCircle, Bold, Bot, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Code2, Clock3, FileAudio, FileText, FolderOpen, Heading1, Heading2, Image as ImageIcon, Import, Italic, Library, Link2, List, ListChecks, ListOrdered, Minus, Pencil, Plus, Quote, Redo2, RefreshCw, Save, Search, Settings, Strikethrough, Trash2, Underline as UnderlineIcon, Undo2, Upload, X, XCircle } from 'lucide-react';
+import type { AgentScope, AIArtifact, AIArtifactTemplate, LibraryCalendarDay, LibraryItem, NoteDetail, ProcessingJob, RecordingDetail, RecordingListItem, RichTextDocument, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { cn } from '@renderer/lib/utils';
 import { useLibraryStore } from '@renderer/stores/libraryStore';
+import { useAssistantStore } from '@renderer/stores/assistantStore';
+import { AssistantPanel } from '@renderer/features/assistant/AssistantPanel';
 
 export function App() {
   return (
@@ -68,8 +70,22 @@ function AppShell() {
     saveSettings,
     refreshSpeechToTextStatus
   } = useLibraryStore();
+  const assistantOpen = useAssistantStore((state) => state.open);
+  const setAssistantOpen = useAssistantStore((state) => state.setOpen);
   const [dragging, setDragging] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [libraryPaneWidth, setLibraryPaneWidth] = useState(420);
+  const [resizingPane, setResizingPane] = useState<'sidebar' | 'library' | null>(null);
   const dragDepth = useRef(0);
+  const paneResize = useRef<{
+    pane: 'sidebar' | 'library';
+    pointerId: number;
+    startX: number;
+    startSidebarWidth: number;
+    startLibraryPaneWidth: number;
+  } | null>(null);
+  const assistantScope = buildAssistantScope(selectedRecording, selectedNote);
+  const assistantScopeLabel = formatAssistantScopeLabel(selectedRecording, selectedNote);
 
   useEffect(() => {
     void load();
@@ -119,10 +135,58 @@ function AppShell() {
     }
   }
 
+  function startPaneResize(pane: 'sidebar' | 'library', event: PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    paneResize.current = {
+      pane,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startSidebarWidth: sidebarWidth,
+      startLibraryPaneWidth: libraryPaneWidth
+    };
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    setResizingPane(pane);
+  }
+
+  function updatePaneResize(event: PointerEvent<HTMLDivElement>) {
+    const resize = paneResize.current;
+    if (!resize || resize.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const delta = event.clientX - resize.startX;
+    if (resize.pane === 'sidebar') {
+      setSidebarWidth(clampNumber(resize.startSidebarWidth + delta, 220, 340));
+    } else {
+      setLibraryPaneWidth(clampNumber(resize.startLibraryPaneWidth + delta, 320, 620));
+    }
+  }
+
+  function endPaneResize(event: PointerEvent<HTMLDivElement>) {
+    const resize = paneResize.current;
+    if (resize?.pointerId === event.pointerId && event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    paneResize.current = null;
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    setResizingPane(null);
+  }
+
   return (
     <div
       data-testid="app-shell"
-      className={cn('relative grid h-full min-h-0 grid-cols-[260px_minmax(320px,420px)_1fr] bg-background text-foreground', dragging && 'outline outline-2 outline-accent')}
+      className={cn('relative grid h-full min-h-0 bg-background text-foreground', dragging && 'outline outline-2 outline-accent')}
+      style={{
+        gridTemplateColumns: `${sidebarWidth}px ${paneResizeHandleWidth}px ${libraryPaneWidth}px ${paneResizeHandleWidth}px minmax(0, 1fr)`
+      }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -137,26 +201,46 @@ function AppShell() {
         onLibrary={showLibrary}
         onCalendar={() => void showCalendar()}
         onSettings={() => void showSettings()}
+        onAssistant={() => setAssistantOpen(!assistantOpen)}
+        assistantOpen={assistantOpen}
         importing={importing}
       />
-          <LibraryPane
-            items={libraryItems}
-            selectedKey={selectedNote ? libraryItemKey('note', selectedNote.id) : selectedRecording ? libraryItemKey('recording', selectedRecording.id) : null}
-            loading={loading}
-            importing={importing}
-            onSelect={(item) => {
-              if (item.kind === 'recording') {
-                void selectRecording(item.id);
-              } else {
-                void selectNote(item.id);
-              }
-            }}
-            onRevealInFolder={(id) => void revealRecordingInFolder(id)}
-            onDeleteRecording={(id) => void deleteRecording(id)}
-            onDeleteNote={(id) => void deleteNote(id)}
-            onImport={() => void importFromDialog()}
-            onCreateNote={() => void createNote()}
-          />
+      <PaneResizeHandle
+        testId="sidebar-resize-handle"
+        active={resizingPane === 'sidebar'}
+        title="Resize Sidebar"
+        onPointerDown={(event) => startPaneResize('sidebar', event)}
+        onPointerMove={updatePaneResize}
+        onPointerUp={endPaneResize}
+        onPointerCancel={endPaneResize}
+      />
+      <LibraryPane
+        items={libraryItems}
+        selectedKey={selectedNote ? libraryItemKey('note', selectedNote.id) : selectedRecording ? libraryItemKey('recording', selectedRecording.id) : null}
+        loading={loading}
+        importing={importing}
+        onSelect={(item) => {
+          if (item.kind === 'recording') {
+            void selectRecording(item.id);
+          } else {
+            void selectNote(item.id);
+          }
+        }}
+        onRevealInFolder={(id) => void revealRecordingInFolder(id)}
+        onDeleteRecording={(id) => void deleteRecording(id)}
+        onDeleteNote={(id) => void deleteNote(id)}
+        onImport={() => void importFromDialog()}
+        onCreateNote={() => void createNote()}
+      />
+      <PaneResizeHandle
+        testId="library-resize-handle"
+        active={resizingPane === 'library'}
+        title="Resize Library"
+        onPointerDown={(event) => startPaneResize('library', event)}
+        onPointerMove={updatePaneResize}
+        onPointerUp={endPaneResize}
+        onPointerCancel={endPaneResize}
+      />
       <main className="min-h-0 min-w-0 border-l border-border bg-surface-elevated">
         {error ? <ErrorBanner message={error} /> : null}
         {viewMode === 'settings' ? (
@@ -211,6 +295,15 @@ function AppShell() {
           />
         )}
       </main>
+      {assistantOpen ? (
+        <AssistantPanel
+          scope={assistantScope}
+          scopeLabel={assistantScopeLabel}
+          onClose={() => setAssistantOpen(false)}
+          onOpenRecording={(id) => void selectRecording(id)}
+          onOpenNote={(id) => void selectNote(id)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -223,6 +316,35 @@ function DropOverlay() {
         <div className="text-base font-semibold">释放以导入音频</div>
         <p className="mt-2 text-sm text-muted-foreground">支持 M4A、MP3、WAV，可一次拖入多个文件。</p>
       </div>
+    </div>
+  );
+}
+
+const paneResizeHandleWidth = 6;
+
+function PaneResizeHandle(props: {
+  testId: string;
+  title: string;
+  active: boolean;
+  onPointerDown(event: PointerEvent<HTMLDivElement>): void;
+  onPointerMove(event: PointerEvent<HTMLDivElement>): void;
+  onPointerUp(event: PointerEvent<HTMLDivElement>): void;
+  onPointerCancel(event: PointerEvent<HTMLDivElement>): void;
+}) {
+  return (
+    <div
+      data-testid={props.testId}
+      className={cn(
+        'relative z-20 min-h-0 cursor-col-resize touch-none bg-transparent transition-colors hover:bg-accent/15',
+        props.active && 'bg-accent/20'
+      )}
+      title={props.title}
+      onPointerDown={props.onPointerDown}
+      onPointerMove={props.onPointerMove}
+      onPointerUp={props.onPointerUp}
+      onPointerCancel={props.onPointerCancel}
+    >
+      <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border" />
     </div>
   );
 }
@@ -244,14 +366,16 @@ function Sidebar(props: {
   query: string;
   activeView: 'library' | 'calendar' | 'settings';
   importing: boolean;
+  assistantOpen: boolean;
   onQueryChange(value: string): void;
   onImport(): void;
   onLibrary(): void;
   onCalendar(): void;
   onSettings(): void;
+  onAssistant(): void;
 }) {
   return (
-    <aside className="flex min-w-0 flex-col border-r border-border bg-surface px-3 py-3">
+    <aside data-testid="sidebar-pane" className="flex min-w-0 flex-col border-r border-border bg-surface px-3 py-3">
       <div className="flex h-10 items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-[15px] font-semibold">
           <FileAudio className="h-4 w-4 text-accent" />
@@ -275,6 +399,7 @@ function Sidebar(props: {
       <nav className="mt-5 space-y-1">
         <SidebarItem icon={<Library className="h-4 w-4" />} label="Library" active={props.activeView === 'library'} onClick={props.onLibrary} />
         <SidebarItem icon={<CalendarDays className="h-4 w-4" />} label="Calendar" active={props.activeView === 'calendar'} onClick={props.onCalendar} />
+        <SidebarItem icon={<Bot className="h-4 w-4" />} label="Ask Distill" active={props.assistantOpen} onClick={props.onAssistant} />
         <SidebarItem icon={<Settings className="h-4 w-4" />} label="Settings" active={props.activeView === 'settings'} onClick={props.onSettings} />
       </nav>
 
@@ -377,7 +502,7 @@ function LibraryPane(props: {
   }
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-col bg-background">
+    <section data-testid="library-pane" className="flex min-h-0 min-w-0 flex-col bg-background">
       <header className="flex h-14 items-center justify-between border-b border-border px-4">
         <div>
           <h1 className="text-base font-semibold">Library</h1>
@@ -1914,6 +2039,42 @@ function formatRecordingListDate(recording: RecordingListItem): string {
 
 function libraryItemKey(kind: LibraryItem['kind'], id: string): string {
   return `${kind}:${id}`;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function buildAssistantScope(recording: RecordingDetail | null, note: NoteDetail | null): AgentScope {
+  if (recording) {
+    return {
+      kind: 'current',
+      item: {
+        kind: 'recording',
+        id: recording.id
+      }
+    };
+  }
+  if (note) {
+    return {
+      kind: 'current',
+      item: {
+        kind: 'note',
+        id: note.id
+      }
+    };
+  }
+  return { kind: 'all' };
+}
+
+function formatAssistantScopeLabel(recording: RecordingDetail | null, note: NoteDetail | null): string {
+  if (recording) {
+    return `Current Recording · ${recording.title}`;
+  }
+  if (note) {
+    return `Current Note · ${note.title}`;
+  }
+  return 'All Library';
 }
 
 function noteSignature(title: string, contentJson: RichTextDocument, plainText: string): string {

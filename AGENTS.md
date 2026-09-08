@@ -1,12 +1,13 @@
 # Distill AI 开发指南
 
-Distill 是一个本地优先的 Windows 桌面语音笔记资料库。核心对象是 `Recording`；AI 是整理层，不是产品中心。
+Distill 是一个本地优先的 Windows 桌面语音笔记资料库。核心对象是 `Recording`；AI 是整理、检索和反思辅助层，不是产品中心。
 
 ## 产品边界
 
 - 输入来自外部导入的音频，主要是 iPhone「语音备忘录」生成的 `.m4a` 文件。
-- 本应用不是 Windows 录音机、SaaS 仪表盘、聊天机器人、后端服务或协作产品。
+- 本应用不是 Windows 录音机、SaaS 仪表盘、通用聊天机器人、后端服务或协作产品。
 - 核心工作流是：导入、转写、阅读、回听、理解、整理、搜索。
+- Assistant 是围绕用户自身 Recording、Transcript、AIArtifact 和 Note 进行只读检索、连接和反思的次级能力；它不是 Distill 的默认产品入口，也不取代 Recording、Note、Transcript。
 
 ## 架构
 
@@ -20,6 +21,7 @@ Distill 是一个本地优先的 Windows 桌面语音笔记资料库。核心对
 
 - 原始 Transcript 必须永久保留。AI 输出绝不能覆盖 Transcript 原文。
 - 使用 `AIArtifact`，不要使用 `Recording.summary`，因为同一条录音可以有多个模板和多次重新生成的版本。
+- 第一阶段 Assistant/Agent tools 必须保持 read-only；未来写入工具必须单独设计 human confirmation。
 - 长时间运行的任务必须记录到 `ProcessingJob`；不要只把重要处理状态保存在 React 内存中。
 - 数据库 schema 修改必须通过 `src/main/database/migrations` 下的 SQL migration 完成。
 - 不要为了正常 schema 变更要求用户删除数据库。

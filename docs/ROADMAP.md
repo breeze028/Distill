@@ -8,7 +8,7 @@
 
 - 核心对象始终是 `Recording`。
 - 核心体验始终是：导入、转写、阅读、回听、理解、整理、搜索。
-- AI 是整理层，不是聊天入口。
+- AI 是整理、检索和反思辅助层；Assistant 是次级 reflection/retrieval layer，不是 Distill 的默认产品入口。
 - 保持 local-first、单用户、本地 SQLite 优先。
 - 不为了“看起来高级”引入后端、账号、云同步、向量库或复杂插件系统。
 
@@ -201,6 +201,27 @@
 - 增加导入完成后的系统通知或非打扰式提示。
 - 增加更完整的文件稳定性策略，处理大文件复制、iCloud 同步和临时文件。
 
+## Phase 4A：Read-only Personal Reflection Agent
+
+目标：让用户可以打开 Ask Distill，围绕自己长期保存的 Recording、Transcript、AIArtifact 和文本 Note 提问，并由模型决定调用哪些只读工具检索真实资料后回答。
+
+当前已完成：
+
+- 已新增独立 `AgentModel` 边界，保留 `LLMProvider.generate()` 专门服务 AIArtifact generation。
+- 已新增 `DeepSeekAgentModel`，使用现有 DeepSeek API Key 与 model 设置调用 tool calling；自动化测试使用 fake/mock model，不调用真实 DeepSeek。
+- 已新增 `ToolRegistry`、Zod 参数校验、结构化 tool error 和 5 个只读 Library tools。
+- 已新增 `AgentRuntime`，负责最多 8 步的 model/tool loop、source collection、usage 汇总和 trace。
+- 已新增 `agent_conversation` / `agent_message` migration 与 repository，Assistant 多轮对话可持久化。
+- 已新增 typed Assistant IPC、preload API、`assistantStore` 和独立 `src/renderer/features/assistant/` 组件。
+- UI 已接入可收起右侧 Ask Distill 面板，支持 All Library / Current Item scope，显示回答、activity、structured Sources，并可点击 Source 打开 Recording 或 Note。
+
+下一步：
+
+- Semantic Search：在 SQLite FTS5 不足以覆盖“字面不同但语义相同”的回顾问题时单独设计。
+- Write Tools + Human Confirmation：未来允许创建 Note、Tag、Todo 等写入动作前，必须先设计人工确认。
+- Weekly Reflection：定期回顾近期资料，生成可审阅的周/月回顾。
+- Reflection Questions：基于历史内容提出可选的反思问题，但不做自主后台代理。
+
 ## Phase 5：稳定性、打包与数据安全
 
 目标：把原型提升到长期可用的本地桌面应用。
@@ -228,6 +249,9 @@
 - 云同步
 - 团队协作
 - 向量数据库
+- Assistant write tools without human confirmation
+- Background autonomous agent
+- Multi-agent framework
 - embedding search
 - speaker diarization
 - 完整 Word 级编辑器

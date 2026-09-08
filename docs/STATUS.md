@@ -6,7 +6,7 @@
 
 ## 当前阶段
 
-当前处于 Phase 1 起步阶段。
+当前处于 Phase 1/2/3 并行推进，并已完成 Read-only Personal Reflection Agent 第一版纵向切片。
 
 Phase 0 目标：项目初始化，并实现 `Import M4A -> 存入 Recording -> Library 显示 -> 打开 Detail -> 播放 M4A` 的最小纵向闭环。
 
@@ -23,6 +23,10 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 Phase 3 当前目标：扩展 Library 资料库体验，支持录音、文本笔记、搜索和日历浏览。
 
 状态：已启动。
+
+Read-only Personal Reflection Agent 当前目标：在不改变核心资料库产品形态的前提下，增加一个可收起的 Ask Distill 面板，让用户基于真实 Recording、Transcript、AIArtifact 和 Note 做回顾问答。
+
+状态：第一版纵向切片已完成。
 
 ## 已完成
 
@@ -95,6 +99,11 @@ Phase 3 当前目标：扩展 Library 资料库体验，支持录音、文本笔
 - AI History 记录支持右键显示 Delete 并删除单条 `AIArtifact`；删除后 Summary 会回退到剩余最新版本，搜索索引同步刷新。
 - DeepSeek provider 已增加基础错误分类：API Key/权限错误、频率或额度限制、服务端错误、响应缺失和 JSON/schema 错误。
 - AI 笔记生成失败时会把 provider raw response 写入 `ProcessingJob.errorDetail`，并在 UI 中以折叠诊断详情展示。
+- 新增 Read-only Personal Reflection Agent：独立 `AgentModel`、`DeepSeekAgentModel`、`MockAgentModel`、`AgentRuntime`、`ToolRegistry`、Library read-only tools、`AgentService` 和 Assistant typed IPC。
+- 新增 `agent_conversation` / `agent_message` 表，Assistant 多轮对话可以持久化；Agent run 不塞进 `ProcessingJob`。
+- Assistant tools 当前支持 `search_library`、`get_recording`、`get_transcript`、`get_note`、`list_library_by_date_range`，全部只读，参数经过 Zod validation，并由程序维护 structured Sources。
+- Renderer 新增 `src/renderer/features/assistant/` 和 `assistantStore`，`App.tsx` 只负责打开/关闭、scope 和 source navigation 集成。
+- UI 新增可收起右侧 Ask Distill 面板，支持 All Library 和 Current Item scope，显示回答、sources 和运行 activity；点击 recording/note source 可打开对应详情。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -102,7 +111,7 @@ Phase 3 当前目标：扩展 Library 资料库体验，支持录音、文本笔
 
 - Renderer 只通过 preload 暴露的 `window.distillAPI` 与 Main 通信。
 - Renderer 不直接访问 Node、SQLite、文件系统或 API Key。
-- Main process 负责数据库、导入、设置、音频协议、未来 LLM provider、未来 STT worker。
+- Main process 负责数据库、导入、设置、音频协议、LLM provider、Read-only Agent runtime 和 STT worker。
 - `LLMProvider` 已定义，并有 `DeepSeekProvider` 初始实现。
 - `LLMProvider` 已接入应用启动流程，并通过 settings 在 DeepSeek/mock provider 间选择。
 - `SpeechToTextService` 已定义，并有 Python Worker 实现骨架与 mock 实现。
@@ -173,6 +182,10 @@ pnpm dev
 - packaged app 中文本编辑器增强工具栏可见；图片导入后会复制到托管资源目录，并能在笔记编辑器中渲染
 - packaged app 中 Calendar 可显示笔记所在日期，并可从当天列表打开笔记
 - packaged app 中点击笔记空白编辑区域可聚焦并输入；smoke 捕获 renderer error，确认 New Note 不产生白屏异常
+- Agent Runtime / ToolRegistry 单测覆盖：unknown tool、Zod validation、tool error、no tool final answer、单次 tool call、多轮 sequential tool call、maxSteps 和 source collection。
+- Agent tools 集成测试使用真实 SQLite + Repository 覆盖录音 transcript 搜索、文本 note 搜索读取，以及 Current Item scope 限制。
+- DeepSeekAgentModel 使用 mock fetch 验证 tool calling 请求体、`tool_calls` 解析、usage 映射和错误分类，不调用真实 DeepSeek。
+- Assistant packaged Electron smoke 覆盖：打开 Ask Distill、mock Agent 回答、显示 Sources、点击 Recording Source 打开录音、点击 Note Source 打开笔记、对话持久化、1366x768/1920x1080 open layout、closed layout 和 renderer error 捕获。
 
 ## 当前已知限制
 
@@ -186,18 +199,20 @@ pnpm dev
 - Forge packaging 为了 Phase 0 中诊断 `better-sqlite3` 原生依赖，暂时关闭 `asar`。
 - 当前 UI 文案仍有较多英文，后续可以逐步中文化或引入轻量 i18n。
 - 当前 Playwright smoke 是脚本形式，还不是完整 Playwright test suite。
+- Assistant 第一版仍使用 SQLite FTS5 字面检索，不包含 semantic search、embedding 或 vector database；中文多词拆分召回仍受当前 FTS/fallback 策略限制。
+- Assistant 第一版 source 点击至少打开 Recording/Note；精确跳转 transcript segment 和 audio seek 的 source navigation 数据结构已预留，但 UI 尚未完成深跳转。
+- Assistant 第一版没有 streaming；运行中只显示简化 activity，不展示 chain-of-thought。
 - 文本编辑器目前是基础富文本能力，不包含完整 Word 级分页、样式管理、表格、图片缩放裁剪和复杂导出。
 
 ## 下一步建议
 
-继续推进 Phase 3：把手写笔记和录音整理真正打通。
+继续推进 Assistant 的检索质量与 source navigation，同时保持 read-only 边界。
 
 优先任务：
 
-- 设计“从录音生成可编辑笔记”的桥接流程。
-- 增加笔记导出 Markdown/HTML。
-- 增加笔记与录音之间的关联和互相跳转。
-- 增加图片缩放、替换、删除资源清理和粘贴图片导入。
+- 增加 transcript segment source 的 UI 深跳转和 audio seek。
+- 观察 SQLite FTS5 在真实中文资料库中的召回，再决定是否设计 semantic search。
+- 设计 Write Tools + Human Confirmation，不在第一版直接实现写入。
 
 ## 重要提交
 

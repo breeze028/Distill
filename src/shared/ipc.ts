@@ -1,5 +1,6 @@
-import type { AIArtifactTemplate, AppSettings, DeleteRecordingResult, ImportRecordingResult, LibraryCalendarDay, LibraryItem, NoteDetail, NoteImageImportResult, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
+import type { AgentConversation, AgentConversationDetail, AgentRunResult, AIArtifactTemplate, AppSettings, DeleteRecordingResult, ImportRecordingResult, LibraryCalendarDay, LibraryItem, NoteDetail, NoteImageImportResult, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
 import type { CalendarMonthRequest, CreateNoteRequest, DeleteAIArtifactRequest, EditTranscriptSegmentRequest, NoteIdRequest, NoteImagePathRequest, RecordingDateRequest, RecordingIdRequest, SaveSettingsRequest, UpdateNoteRequest } from './schemas/ipc';
+import type { AgentConversationIdRequest, AgentRunRequest } from './schemas/agent';
 
 export const ipcChannels = {
   recordingsList: 'recordings:list',
@@ -32,7 +33,10 @@ export const ipcChannels = {
   settingsSave: 'settings:save',
   settingsSelectAudioLibraryFolder: 'settings:select-audio-library-folder',
   audioLibraryFolderStatus: 'audio-library-folder:status',
-  sttStatus: 'stt:status'
+  sttStatus: 'stt:status',
+  assistantListConversations: 'assistant:list-conversations',
+  assistantGetConversation: 'assistant:get-conversation',
+  assistantRun: 'assistant:run'
 } as const;
 
 export type DistillApi = {
@@ -68,6 +72,9 @@ export type DistillApi = {
   selectAudioLibraryFolder(): Promise<string | null>;
   getAudioLibraryFolderStatus(): Promise<WatchFolderStatus>;
   getSpeechToTextStatus(): Promise<SpeechToTextStatus>;
+  listAssistantConversations(): Promise<AgentConversation[]>;
+  getAssistantConversation(input: AgentConversationIdRequest): Promise<AgentConversationDetail | null>;
+  runAssistant(input: AgentRunRequest): Promise<AgentRunResult>;
 };
 
 declare global {

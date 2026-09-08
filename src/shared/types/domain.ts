@@ -177,3 +177,80 @@ export type WatchFolderStatus = {
 };
 
 export type ImportableAudioFormat = 'm4a' | 'mp3' | 'wav';
+
+export type AgentScope =
+  | {
+      kind: 'all';
+    }
+  | {
+      kind: 'current';
+      item: {
+        kind: 'recording' | 'note';
+        id: string;
+      };
+    };
+
+export type AgentSource =
+  | {
+      kind: 'recording';
+      recordingId: string;
+      title: string;
+      date: string;
+      segmentId?: string;
+      startTime?: number;
+      snippet?: string;
+    }
+  | {
+      kind: 'note';
+      noteId: string;
+      title: string;
+      date: string;
+      snippet?: string;
+    };
+
+export type AgentUsage = {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+};
+
+export type AgentTraceStep = {
+  step: number;
+  type: 'model' | 'tool';
+  model?: string;
+  toolName?: string;
+  arguments?: unknown;
+  durationMs: number;
+  success: boolean;
+  errorMessage?: string;
+  usage?: AgentUsage;
+};
+
+export type AgentConversation = {
+  id: string;
+  title: string | null;
+  scope: AgentScope;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AgentConversationMessage = {
+  id: string;
+  conversationId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  sources: AgentSource[];
+  createdAt: string;
+};
+
+export type AgentConversationDetail = AgentConversation & {
+  messages: AgentConversationMessage[];
+};
+
+export type AgentRunResult = {
+  conversation: AgentConversationDetail;
+  answer: string;
+  sources: AgentSource[];
+  trace: AgentTraceStep[];
+  usage?: AgentUsage;
+};

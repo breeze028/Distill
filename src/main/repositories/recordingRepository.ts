@@ -185,6 +185,18 @@ export class RecordingRepository {
       .map((row) => this.toListItem(row));
   }
 
+  listRecordingsByDateRange(startDate: string, endDate: string, limit = 50): RecordingListItem[] {
+    const rows = this.db.prepare('SELECT * FROM recording').all() as RecordingRow[];
+    return rows
+      .filter((row) => {
+        const date = recordingDateKey(row);
+        return date >= startDate && date <= endDate;
+      })
+      .sort((left, right) => recordingTimeMs(right) - recordingTimeMs(left))
+      .slice(0, Math.max(1, Math.min(limit, 100)))
+      .map((row) => this.toListItem(row));
+  }
+
   getRecording(id: string): RecordingDetail | null {
     const row = this.db.prepare('SELECT * FROM recording WHERE id = ?').get(id) as RecordingRow | undefined;
     if (!row) {
@@ -247,6 +259,28 @@ export class RecordingRepository {
     }
 
     return [...rowsById.values()].map((row) => this.toListItem(row));
+  }
+
+  searchWithinRecording(recordingId: string, query: string): boolean {
+    const recording = this.getRecording(recordingId);
+    if (!recording) {
+      return false;
+    }
+
+    const searchableText = [
+      recording.title,
+      recording.originalFileName,
+      recording.transcript?.fullText ?? '',
+      serializeArtifact(recording.latestArtifact?.content),
+      recording.tags.join(' ')
+    ].join('\n').toLocaleLowerCase();
+
+    return query
+      .trim()
+      .toLocaleLowerCase()
+      .split(/\s+/)
+      .filter(Boolean)
+      .some((part) => searchableText.includes(part));
   }
 
   addTranscript(recordingId: string, transcript: NewTranscript): Transcript {

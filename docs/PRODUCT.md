@@ -2,6 +2,8 @@
 
 Distill 是个人资料库、语音 Transcript 阅读器和 AI 笔记工作区。Library 中可以同时放录音和手写文本笔记。
 
+Assistant 是围绕用户自身资料进行检索、连接和反思的辅助层。它不是 Distill 的默认产品入口，也不取代 Recording、Note、Transcript；用户需要回顾长期保存内容时，可以打开 Ask Distill 作为右侧面板使用。
+
 ## 第一阶段工作流
 
 ```text
@@ -21,6 +23,7 @@ M4A
 
 - 资料库：录音列表、状态、日期、时长、导入操作、空状态；所有新导入音频会复制到用户指定的音频库文件夹；列表条目右键可打开所在文件夹或删除录音。
 - 文本笔记：Library 中可新建文本笔记，右侧使用基础富文本编辑器编辑标题和正文，支持常用格式、任务列表、链接、分割线、插入本地照片、自动保存和搜索正文。笔记正文保存在 Distill 的 SQLite 数据库中，不会作为独立文档文件出现在音频库文件夹里。
+- Assistant：右侧可收起 Ask Distill 面板，支持 All Library 或 Current Item scope。第一阶段只读读取 Recording metadata、Transcript、AIArtifact 和文本 Note，回答中显示结构化 Sources，并可点击打开对应 Recording 或 Note。
 - 日历：按录音/笔记创建日期展示哪些天有记录，并可查看当天项目；新导入音频优先使用文件内嵌创建时间。
 - 录音详情：音频播放器、summary 区域、transcript 区域。
 - Transcript 阅读器支持按 segment 人工修正文本，原始机器转写版本仍保留。
@@ -33,6 +36,8 @@ M4A
 - 云同步
 - 账号系统
 - 向量搜索
+- Assistant Write Tools
+- 自动周报 / Weekly Reflection
 - 说话人分离
 - 移动端应用
 - 完整 Word 级排版、分页、样式系统和协作批注
