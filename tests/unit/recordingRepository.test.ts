@@ -173,6 +173,40 @@ describe('RecordingRepository', () => {
     repository.deleteAIArtifact(recording.id, firstArtifact.id);
     expect(repository.listRecordings()[0]?.title).toBe('original-file-title');
   });
+
+  it('deletes a recording and its related searchable data', () => {
+    const db = dbManager.open();
+    const repository = new RecordingRepository(db);
+    repository.ensureBuiltInTemplates([testTemplate('default-summary')]);
+    const recording = repository.createRecording(newRecording('delete-me.m4a'));
+    repository.addTranscript(recording.id, {
+      language: 'zh',
+      duration: 3,
+      fullText: '删除测试关键词。',
+      segments: [
+        {
+          id: 'ignored',
+          transcriptId: 'ignored',
+          startTime: 0,
+          endTime: 3,
+          text: '删除测试关键词。'
+        }
+      ]
+    });
+    repository.addAIArtifact(aiArtifact(recording.id, 'default-summary', '删除测试 AI 标题'));
+    repository.createProcessingJob(recording.id, 'ai', 'succeeded');
+
+    expect(repository.search('删除测试关键词').map((item) => item.id)).toContain(recording.id);
+
+    repository.deleteRecording(recording.id);
+
+    expect(repository.getRecording(recording.id)).toBeNull();
+    expect(repository.search('删除测试关键词').map((item) => item.id)).not.toContain(recording.id);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM recording_fts WHERE recording_id = ?').get(recording.id)).toEqual({ count: 0 });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM transcript WHERE recording_id = ?').get(recording.id)).toEqual({ count: 0 });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM ai_artifact WHERE recording_id = ?').get(recording.id)).toEqual({ count: 0 });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM processing_job WHERE recording_id = ?').get(recording.id)).toEqual({ count: 0 });
+  });
 });
 
 function newRecording(fileName: string, overrides: Partial<NewRecording> = {}): NewRecording {

@@ -20,6 +20,10 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 
 状态：已启动。
 
+Phase 3 当前目标：扩展 Library 资料库体验，支持录音、文本笔记、搜索和日历浏览。
+
+状态：已启动。
+
 ## 已完成
 
 - 初始化 Electron + React + TypeScript + Vite 桌面应用。
@@ -28,12 +32,20 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - 建立数据库 migration 基础设施。
 - 创建 Python Worker 基础目录与占位 worker。
 - 创建 `Recording`、`Transcript`、`TranscriptSegment`、`AIArtifact`、`AITemplate`、`Tag`、`RecordingTag`、`ProcessingJob`、`AppSetting` 初始 schema。
+- 新增 `Note` 数据模型、`note` 表和 `note_fts` 搜索索引，用于保存用户手写文本笔记。
 - 实现 `.m4a`、`.mp3`、`.wav` 手动导入；新导入音频会复制到用户指定的音频库文件夹。
 - 实现窗口级拖拽导入 `.m4a`、`.mp3`、`.wav`，支持一次拖入多个音频文件，并复用音频库文件夹复制规则。
 - 导入后保存原始文件名、路径、导入时间、时长、大小、创建时间和格式。
+- 新导入音频的创建时间优先来自音频 metadata creation time，读不到时回退文件系统创建时间，Calendar 再以该字段归类。
 - 实现重复导入检测。
-- 实现 Library 列表。
-- 实现 Calendar 入口：按录音创建日期展示哪些天有记录，并可打开当天录音列表。
+- 实现 Library 列表；当前可混合显示录音和文本笔记。
+- Library 已新增 New Note 入口，支持创建文本笔记。
+- 文本笔记详情使用 Tiptap 基础富文本编辑器，支持标题、正文、粗体、斜体、下划线、删除线、标题、列表、任务列表、引用、行内代码、代码块、链接、分割线、撤销/重做和自动保存。
+- 文本笔记支持插入本地照片；图片会复制到 Main 侧托管的 note image assets，并通过 `distill-asset://note-image/...` 安全协议渲染。
+- 文本笔记保存 Tiptap JSON 正文与纯文本正文；纯文本用于列表预览和 Library 搜索。
+- 文本笔记当前存储在 Distill SQLite 数据库的 `note` 表中；音频库文件夹只存放音频副本，笔记不会以文件形式出现在该文件夹。
+- Library 列表条目支持右键打开所在文件夹或删除录音；删除库内副本时会移到回收站，旧外部路径录音只删除 Distill 记录。
+- 实现 Calendar 入口：按录音和笔记创建日期展示哪些天有记录，并可打开当天混合项目列表。
 - 实现 Recording Detail。
 - 使用 `distill-audio://recording/{id}` 安全协议播放本地音频。
 - `distill-audio://` 支持 byte range 响应，保证播放器 seek 后可以从目标位置读取音频数据。
@@ -95,6 +107,7 @@ Phase 2 当前目标：建立基于 Transcript 的结构化 AI 笔记生成闭�
 - `LLMProvider` 已接入应用启动流程，并通过 settings 在 DeepSeek/mock provider 间选择。
 - `SpeechToTextService` 已定义，并有 Python Worker 实现骨架与 mock 实现。
 - `AIArtifact` 数据模型已建立，避免把 AI 输出写死为 `Recording.summary`。
+- `Note` 数据模型已建立，避免把用户手写笔记混入 `Recording` 或 `AIArtifact`。
 - `ProcessingJob` 表已建立，转写任务和 AI 笔记生成任务都已开始接入。
 
 ## 验证记录
@@ -122,12 +135,14 @@ pnpm dev
 - Calendar 月聚合、本地日期回退和按日录音列表
 - 启动恢复中断的 ProcessingJob
 - Transcript / AIArtifact / FTS 搜索基础 pipeline
+- Note 创建、更新、删除、Calendar 日期聚合和 `note_fts` 搜索索引
+- Note 图片导入服务、本地托管资源路径校验和图片格式校验
 - packaged app 启动
 - packaged app 导入真实 `.m4a`
 - packaged app 通过拖拽导入音频
 - 导入后持久化
 - 点击录音进入详情
-- 打开 Calendar 后当前月可显示有记录日期；点击日期显示当天录音，点击当天录音回到详情页
+- 打开 Calendar 后当前月可显示有记录日期；点击日期显示当天录音和笔记，点击当天录音回到录音详情，点击当天笔记打开笔记编辑器
 - 导入后自动触发 mock 转写
 - 手动触发 mock 转写
 - 转写后展示 transcript segment
@@ -154,6 +169,10 @@ pnpm dev
 - Sidebar 不再显示 Inbox；Settings 可打开/收回
 - 保存音频库文件夹后状态显示为监听中；复制新 `.m4a` 到该文件夹会自动导入、触发转写并刷新 Library UI
 - Settings 中音频库文件夹区域显示文件夹选择按钮，并且不再暴露可手动输入的路径文本框
+- packaged app 中 New Note 可创建文本笔记，编辑正文后自动保存，Library 列表展示预览，Library 搜索可搜到笔记正文
+- packaged app 中文本编辑器增强工具栏可见；图片导入后会复制到托管资源目录，并能在笔记编辑器中渲染
+- packaged app 中 Calendar 可显示笔记所在日期，并可从当天列表打开笔记
+- packaged app 中点击笔记空白编辑区域可聚焦并输入；smoke 捕获 renderer error，确认 New Note 不产生白屏异常
 
 ## 当前已知限制
 
@@ -167,16 +186,18 @@ pnpm dev
 - Forge packaging 为了 Phase 0 中诊断 `better-sqlite3` 原生依赖，暂时关闭 `asar`。
 - 当前 UI 文案仍有较多英文，后续可以逐步中文化或引入轻量 i18n。
 - 当前 Playwright smoke 是脚本形式，还不是完整 Playwright test suite。
+- 文本编辑器目前是基础富文本能力，不包含完整 Word 级分页、样式管理、表格、图片缩放裁剪和复杂导出。
 
 ## 下一步建议
 
-继续推进 Phase 1：真实本地转写闭环。
+继续推进 Phase 3：把手写笔记和录音整理真正打通。
 
 优先任务：
 
-- 设计模型安装入口，避免用户手动读命令。
-- Detail 页面展示真实 Transcript。
-- 为 Worker 缺失、模型缺失、转写失败添加更细的引导文案。
+- 设计“从录音生成可编辑笔记”的桥接流程。
+- 增加笔记导出 Markdown/HTML。
+- 增加笔记与录音之间的关联和互相跳转。
+- 增加图片缩放、替换、删除资源清理和粘贴图片导入。
 
 ## 重要提交
 

@@ -1,5 +1,5 @@
-import type { AIArtifactTemplate, AppSettings, ImportRecordingResult, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
-import type { CalendarMonthRequest, DeleteAIArtifactRequest, EditTranscriptSegmentRequest, RecordingDateRequest, SaveSettingsRequest } from './schemas/ipc';
+import type { AIArtifactTemplate, AppSettings, DeleteRecordingResult, ImportRecordingResult, LibraryCalendarDay, LibraryItem, NoteDetail, NoteImageImportResult, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
+import type { CalendarMonthRequest, CreateNoteRequest, DeleteAIArtifactRequest, EditTranscriptSegmentRequest, NoteIdRequest, NoteImagePathRequest, RecordingDateRequest, RecordingIdRequest, SaveSettingsRequest, UpdateNoteRequest } from './schemas/ipc';
 
 export const ipcChannels = {
   recordingsList: 'recordings:list',
@@ -11,10 +11,22 @@ export const ipcChannels = {
   recordingsStartTranscription: 'recordings:start-transcription',
   recordingsTranscribe: 'recordings:transcribe',
   recordingsEditTranscriptSegment: 'recordings:edit-transcript-segment',
+  recordingsShowInFolder: 'recordings:show-in-folder',
+  recordingsDelete: 'recordings:delete',
   recordingsStartAIGeneration: 'recordings:start-ai-generation',
   recordingsDeleteAIArtifact: 'recordings:delete-ai-artifact',
   aiTemplatesList: 'ai-templates:list',
   recordingsSearch: 'recordings:search',
+  libraryList: 'library:list',
+  librarySearch: 'library:search',
+  libraryGetCalendarMonth: 'library:get-calendar-month',
+  libraryListByDate: 'library:list-by-date',
+  notesCreate: 'notes:create',
+  notesGet: 'notes:get',
+  notesUpdate: 'notes:update',
+  notesDelete: 'notes:delete',
+  notesImportImageDialog: 'notes:import-image-dialog',
+  notesImportImagePath: 'notes:import-image-path',
   libraryChanged: 'library:changed',
   settingsGet: 'settings:get',
   settingsSave: 'settings:save',
@@ -34,10 +46,22 @@ export type DistillApi = {
   startTranscription(id: string): Promise<RecordingDetail>;
   transcribeRecording(id: string): Promise<RecordingDetail>;
   editTranscriptSegment(input: EditTranscriptSegmentRequest): Promise<RecordingDetail>;
+  showRecordingInFolder(input: RecordingIdRequest): Promise<void>;
+  deleteRecording(input: RecordingIdRequest): Promise<DeleteRecordingResult>;
   startAIGeneration(recordingId: string, templateId?: string): Promise<RecordingDetail>;
   deleteAIArtifact(input: DeleteAIArtifactRequest): Promise<RecordingDetail>;
   listAITemplates(): Promise<AIArtifactTemplate[]>;
   searchRecordings(query: string): Promise<RecordingListItem[]>;
+  listLibraryItems(): Promise<LibraryItem[]>;
+  searchLibraryItems(query: string): Promise<LibraryItem[]>;
+  getLibraryCalendarMonth(input: CalendarMonthRequest): Promise<LibraryCalendarDay[]>;
+  listLibraryItemsByDate(input: RecordingDateRequest): Promise<LibraryItem[]>;
+  createNote(input?: CreateNoteRequest): Promise<NoteDetail>;
+  getNote(input: NoteIdRequest): Promise<NoteDetail | null>;
+  updateNote(input: UpdateNoteRequest): Promise<NoteDetail>;
+  deleteNote(input: NoteIdRequest): Promise<void>;
+  importNoteImageFromDialog(): Promise<NoteImageImportResult | null>;
+  importNoteImageFromPath(input: NoteImagePathRequest): Promise<NoteImageImportResult>;
   onLibraryChanged(callback: () => void): () => void;
   getSettings(): Promise<AppSettings>;
   saveSettings(settings: SaveSettingsRequest): Promise<AppSettings>;

@@ -395,6 +395,22 @@ export class RecordingRepository {
     return updated;
   }
 
+  deleteRecording(recordingId: string): void {
+    const recording = this.db
+      .prepare('SELECT id FROM recording WHERE id = ?')
+      .get(recordingId) as { id: string } | undefined;
+    if (!recording) {
+      throw new Error('Recording was not found.');
+    }
+
+    const write = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM recording_fts WHERE recording_id = ?').run(recordingId);
+      this.db.prepare('DELETE FROM recording WHERE id = ?').run(recordingId);
+    });
+
+    write();
+  }
+
   ensureBuiltInTemplates(templates: Array<{ id: string; name: string; description: string; promptVersion: string; prompt: string; outputSchema: string }>): void {
     const now = new Date().toISOString();
     const upsert = this.db.prepare(

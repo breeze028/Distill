@@ -23,7 +23,11 @@ Renderer 是 React UI，使用 Zustand 管理应用状态。Renderer 只能调�
 
 拖拽导入时，Renderer 只读取浏览器 `File` 对象并调用 `window.distillAPI.getPathForFile`；本地路径解析由 Preload 通过 Electron `webUtils.getPathForFile` 完成，避免 Renderer 直接访问 Electron/Node API。Main 侧导入前会确保已配置音频库文件夹，并由 `FileImportService` 把外部音频复制进该文件夹后再写入 `Recording.file_path`。
 
-Calendar 视图通过 `recordings:get-calendar-month` 和 `recordings:list-by-date` 读取只读聚合数据。日期归类在 Main/repository 侧完成，优先使用 recording `created_at`，缺失时回退 `imported_at`，避免 Renderer 自行解释数据库时间字段。
+Library 视图使用 `library:list` 和 `library:search` 读取混合资料库项目。录音仍由 `RecordingRepository` 管理；文本笔记由独立 `NoteRepository` 管理，并通过 `note` / `note_fts` 表持久化。Renderer 只保存当前选中的 recording 或 note 状态，不直接写库。文本笔记正文以 Tiptap JSON 作为主数据保存，同时写入 `plain_text` 供列表预览和 FTS 搜索使用。
+
+文本笔记图片通过 `notes:import-image-dialog` 选择本地图片。Main 侧 `NoteAssetService` 会把图片复制到应用数据目录下的 note image assets，再返回 `distill-asset://note-image/{fileName}` 给 Renderer 插入到 Tiptap 文档。Renderer 不保存源图片路径，也不把图片二进制写进 SQLite；`distill-asset` 协议只解析受控文件名，避免通过笔记正文读取任意本地文件。
+
+Calendar 视图通过 `library:get-calendar-month` 和 `library:list-by-date` 读取录音与笔记的混合聚合数据。录音日期仍来自 `created_at`，缺失时回退 `imported_at`；笔记日期使用 `created_at`。旧的 `recordings:get-calendar-month` 和 `recordings:list-by-date` 仍作为录音专用接口保留。导入时 `FileImportService` 优先从音频 metadata 的 `creationTime` 写入 recording `created_at`，会忽略 `1904-01-01` 这类明显的容器默认值，读不到有效值时回退文件系统创建时间；日期归类在 Main/repository 侧完成，避免 Renderer 自行解释数据库时间字段。
 
 手动 Retranscribe 使用 `recordings:start-transcription` 立即创建后台 `ProcessingJob` 并返回最新 Recording，Renderer 通过轮询刷新任务状态；同步 `recordings:transcribe` 仍保留给测试和内部调用。
 
@@ -45,6 +49,8 @@ AI 笔记生成使用 `recordings:start-ai-generation`。Renderer 只提交 reco
 - `processing_job`
 - `app_setting`
 - `recording_fts`
+- `note`
+- `note_fts`
 
 数据库 migration 位于 `src/main/database/migrations`。
 
@@ -52,7 +58,9 @@ AI 笔记生成使用 `recordings:start-ai-generation`。Renderer 只提交 reco
 
 ## 搜索
 
-搜索使用 SQLite FTS5。第一版索引字段包括标题、转写文本、AI 内容和标签。
+搜索使用 SQLite FTS5。录音索引字段包括标题、转写文本、AI 内容和标签。
+
+文本笔记使用独立的 `note_fts` 索引标题与纯文本正文。Library 搜索在 Main 侧合并录音搜索结果和笔记搜索结果，再按对应资料的最近更新时间排序返回。Calendar 聚合也在 Main 侧合并录音与笔记，返回数量、类型拆分和录音总时长。
 
 ## 音频播放
 

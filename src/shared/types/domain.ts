@@ -15,10 +15,53 @@ export type RecordingListItem = {
   tags: string[];
 };
 
+export type RichTextDocument = {
+  type: string;
+  content?: unknown[];
+  [key: string]: unknown;
+};
+
+export type NoteListItem = {
+  id: string;
+  title: string;
+  plainTextPreview: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NoteDetail = NoteListItem & {
+  contentJson: RichTextDocument;
+  plainText: string;
+};
+
+export type RecordingLibraryItem = RecordingListItem & {
+  kind: 'recording';
+  sortAt: string;
+  preview: string;
+};
+
+export type NoteLibraryItem = NoteListItem & {
+  kind: 'note';
+  sortAt: string;
+  preview: string;
+};
+
+export type LibraryItem = RecordingLibraryItem | NoteLibraryItem;
+
 export type RecordingCalendarDay = {
   date: string;
   recordingCount: number;
   totalDuration: number | null;
+};
+
+export type LibraryCalendarDay = RecordingCalendarDay & {
+  noteCount: number;
+  itemCount: number;
+};
+
+export type NoteImageImportResult = {
+  src: string;
+  fileName: string;
 };
 
 export type TranscriptSegment = {
@@ -91,6 +134,11 @@ export type RecordingDetail = RecordingListItem & {
 export type ImportRecordingResult = {
   recording: RecordingDetail;
   wasDuplicate: boolean;
+};
+
+export type DeleteRecordingResult = {
+  recordingId: string;
+  fileMovedToTrash: boolean;
 };
 
 export type AppSettings = {

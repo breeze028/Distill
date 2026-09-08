@@ -127,15 +127,18 @@
 
 ## Phase 3：搜索与资料库体验
 
-目标：让录音资料库可用、可找、可浏览。
+目标：让资料库可用、可找、可浏览；Library 不只承载录音，也承载用户手写文本笔记。
 
 范围：
 
 - 完善 SQLite FTS5 索引
 - 搜索 Transcript、AI title、summary、key points、todos、tags
+- 搜索文本笔记标题和正文
 - 支持中文文件名、中文 transcript、中英文混合搜索
 - Library 列表显示 title、date、duration、processing state、tags
-- Calendar 视图按日期展示哪些天有录音，并能打开当天录音列表
+- Library 列表混合展示录音和文本笔记
+- 基础文本笔记编辑器：标题、正文、常用富文本格式、任务列表、链接、图片、自动保存
+- Calendar 视图按日期展示哪些天有录音或笔记，并能打开当天项目列表
 - 基础筛选：Today、Work、Ideas、Life 等可以先用虚拟分类或 tag 实现
 - 录音详情页强化阅读体验
 
@@ -143,13 +146,25 @@
 
 - 搜索速度在本地资料库规模增长后仍可接受
 - 搜索结果能打开对应 Recording
+- 搜索结果能打开对应 Note
 - 中文搜索不崩溃，结果可解释
 
 当前已完成：
 
 - 已新增 Sidebar Calendar 入口，用月历展示当前月哪些日期有录音。
-- 已新增 `recordings:get-calendar-month` 和 `recordings:list-by-date` IPC，Main 侧按 `createdAt ?? importedAt` 的本地日期聚合。
+- 已新增 `recordings:get-calendar-month` 和 `recordings:list-by-date` IPC，Main 侧按 `createdAt ?? importedAt` 的本地日期聚合；新导入音频会优先使用文件内嵌 creation time 填充 `createdAt`。
 - 点击日期会在 Calendar 主面板显示当天录音列表，点击录音会回到现有 Recording Detail。
+- 已新增 `note` / `note_fts` schema、`NoteRepository`、`notes:*` IPC 和 `library:list/search` 混合资料库接口。
+- 已在 Library 增加 New Note 入口，文本笔记和录音混排；选中文本笔记后右侧显示 Tiptap 基础富文本编辑器，并自动保存标题、正文 JSON 和纯文本搜索内容。
+- 文本编辑器已增强常用格式：下划线、行内代码、代码块、任务列表、链接、分割线、图片。
+- 插入照片会先复制到 Main 侧托管的 note image assets，并通过 `distill-asset://note-image/...` 在编辑器中显示。
+- Calendar 已改为混合项目日历，可显示当天录音数、笔记数和录音总时长；点击当天笔记可打开笔记编辑器。
+
+下一步：
+
+- 增加笔记右键重命名、删除二次确认细化和导出 Markdown/HTML。
+- 设计录音和笔记的关联关系，例如从一条录音生成一条可继续编辑的整理笔记。
+- 继续打磨编辑器体验：图片缩放、粘贴清理、搜索命中高亮和笔记内附件管理。
 
 ## Phase 4：音频库文件夹
 
@@ -215,7 +230,7 @@
 - 向量数据库
 - embedding search
 - speaker diarization
-- 复杂富文本编辑器
+- 完整 Word 级编辑器
 - Windows 内录音
 - 音频剪辑器
 - 浏览器扩展

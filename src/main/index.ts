@@ -5,10 +5,12 @@ import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
 import { DatabaseManager } from '@main/database/database';
 import { RecordingRepository } from '@main/repositories/recordingRepository';
+import { NoteRepository } from '@main/repositories/noteRepository';
 import { FileImportService } from '@main/services/fileImportService';
 import { TranscriptionService } from '@main/services/transcriptionService';
 import { AIArtifactService } from '@main/services/aiArtifactService';
 import { WatchFolderService } from '@main/services/watchFolderService';
+import { NoteAssetService } from '@main/services/noteAssetService';
 import { SettingsRepository } from '@main/settings/settingsRepository';
 import { registerIpcHandlers } from '@main/ipc/registerIpc';
 import { ipcChannels } from '@shared/ipc';
@@ -32,6 +34,7 @@ if (started) {
 let databaseManager: DatabaseManager | null = null;
 let recordings: RecordingRepository | null = null;
 let watchFolderService: WatchFolderService | null = null;
+let noteAssets: NoteAssetService | null = null;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -40,6 +43,14 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       stream: true,
+      supportFetchAPI: true
+    }
+  },
+  {
+    scheme: 'distill-asset',
+    privileges: {
+      standard: true,
+      secure: true,
       supportFetchAPI: true
     }
   }
@@ -77,6 +88,8 @@ app.whenReady().then(() => {
   databaseManager = new DatabaseManager();
   const db = databaseManager.open();
   recordings = new RecordingRepository(db);
+  const notes = new NoteRepository(db);
+  noteAssets = new NoteAssetService(process.env.DISTILL_ASSET_DIR ?? path.join(app.getPath('userData'), 'assets'));
   const settings = new SettingsRepository(db);
   const importer = new FileImportService(recordings, undefined, () => settings.getSettings().watchFolder);
   const speechToText = new SelectableSpeechToTextService(settings, {
@@ -98,9 +111,10 @@ app.whenReady().then(() => {
     logger.warn('ProcessingJob', 'Recovered interrupted jobs on startup', { recoveredJobCount });
   }
   recordings.ensureBuiltInTemplates([...builtInTemplates]);
-  registerIpcHandlers({ recordings, importer, transcriber, aiArtifacts, settings, speechToText, watchFolder: watchFolderService });
+  registerIpcHandlers({ recordings, notes, noteAssets, importer, transcriber, aiArtifacts, settings, speechToText, watchFolder: watchFolderService });
   void watchFolderService.refresh();
   registerAudioProtocol();
+  registerAssetProtocol();
   createWindow();
 
   app.on('activate', () => {
@@ -146,6 +160,21 @@ function registerAudioProtocol(): void {
     }
 
     return net.fetch(pathToFileURL(recording.filePath).toString());
+  });
+}
+
+function registerAssetProtocol(): void {
+  protocol.handle('distill-asset', async (request) => {
+    const url = new URL(request.url);
+    const fileName = url.hostname === 'note-image' ? url.pathname.replace(/^\//, '') : '';
+    const filePath = fileName && noteAssets ? noteAssets.resolveNoteImage(fileName) : null;
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      logger.warn('Asset', 'Note image is missing', { fileName });
+      return new Response('Asset not found.', { status: 404 });
+    }
+
+    return net.fetch(pathToFileURL(filePath).toString());
   });
 }
 

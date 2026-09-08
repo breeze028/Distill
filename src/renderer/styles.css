@@ -101,3 +101,120 @@ select {
 .stable-scrollbar::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.75);
 }
+
+.note-editor-content {
+  max-width: 760px;
+  min-height: calc(100vh - 230px);
+  color: hsl(var(--foreground));
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.note-editor-content p {
+  margin: 0 0 0.85rem;
+}
+
+.note-editor-content h1,
+.note-editor-content h2,
+.note-editor-content h3 {
+  margin: 1.4rem 0 0.75rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.note-editor-content h1 {
+  font-size: 1.7rem;
+}
+
+.note-editor-content h2 {
+  font-size: 1.35rem;
+}
+
+.note-editor-content h3 {
+  font-size: 1.15rem;
+}
+
+.note-editor-content ul,
+.note-editor-content ol {
+  margin: 0 0 1rem 1.35rem;
+  padding: 0;
+}
+
+.note-editor-content li {
+  margin: 0.25rem 0;
+}
+
+.note-editor-content blockquote {
+  margin: 1rem 0;
+  border-left: 3px solid hsl(var(--border));
+  padding-left: 1rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.note-editor-content a {
+  color: hsl(var(--accent));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.note-editor-content hr {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.note-editor-content img {
+  display: block;
+  max-width: min(100%, 720px);
+  max-height: 520px;
+  margin: 1rem 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.note-editor-content pre {
+  overflow: auto;
+  border-radius: 6px;
+  background: hsl(var(--muted));
+  padding: 0.8rem 1rem;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.note-editor-content code {
+  border-radius: 4px;
+  background: hsl(var(--muted));
+  padding: 0.1rem 0.25rem;
+  font-size: 0.92em;
+}
+
+.note-editor-content pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.note-editor-content ul[data-type="taskList"] {
+  margin-left: 0;
+  list-style: none;
+}
+
+.note-editor-content ul[data-type="taskList"] li {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  gap: 0.45rem;
+}
+
+.note-editor-content ul[data-type="taskList"] li > label {
+  padding-top: 0.2rem;
+}
+
+.note-editor-content ul[data-type="taskList"] input[type="checkbox"] {
+  height: 0.95rem;
+  width: 0.95rem;
+  accent-color: hsl(var(--accent));
+}
+
+.note-editor-content .ProseMirror-selectednode {
+  outline: 2px solid hsl(var(--ring));
+}

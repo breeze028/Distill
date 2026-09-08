@@ -30,6 +30,36 @@ export const deleteAIArtifactRequestSchema = z.object({
   artifactId: z.string().min(1)
 });
 
+export const recordingIdRequestSchema = z.object({
+  recordingId: z.string().min(1)
+});
+
+const richTextDocumentSchema = z.object({
+  type: z.string().min(1),
+  content: z.array(z.unknown()).optional()
+}).passthrough();
+
+export const createNoteRequestSchema = z.object({
+  title: z.string().trim().max(200).optional(),
+  contentJson: richTextDocumentSchema.optional(),
+  plainText: z.string().max(500_000).optional()
+});
+
+export const noteIdRequestSchema = z.object({
+  noteId: z.string().min(1)
+});
+
+export const updateNoteRequestSchema = z.object({
+  noteId: z.string().min(1),
+  title: z.string().trim().max(200),
+  contentJson: richTextDocumentSchema,
+  plainText: z.string().max(500_000)
+});
+
+export const noteImagePathRequestSchema = z.object({
+  filePath: z.string().min(1)
+});
+
 export const saveSettingsRequestSchema = z.object({
   aiProvider: z.string().min(1).optional(),
   deepSeekApiKey: z.string().optional(),
@@ -46,3 +76,8 @@ export type RecordingDateRequest = z.infer<typeof recordingDateRequestSchema>;
 export type GenerateAIArtifactRequest = z.infer<typeof generateAIArtifactRequestSchema>;
 export type EditTranscriptSegmentRequest = z.infer<typeof editTranscriptSegmentRequestSchema>;
 export type DeleteAIArtifactRequest = z.infer<typeof deleteAIArtifactRequestSchema>;
+export type RecordingIdRequest = z.infer<typeof recordingIdRequestSchema>;
+export type CreateNoteRequest = z.infer<typeof createNoteRequestSchema>;
+export type NoteIdRequest = z.infer<typeof noteIdRequestSchema>;
+export type UpdateNoteRequest = z.infer<typeof updateNoteRequestSchema>;
+export type NoteImagePathRequest = z.infer<typeof noteImagePathRequestSchema>;

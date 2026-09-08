@@ -10,18 +10,22 @@ async function main() {
   const db = path.join(root, 'test-results', 'phase0-ui.db');
   const exe = path.join(root, 'out', 'distill-win32-x64', 'distill.exe');
   const audioLibraryDir = path.join(root, 'test-results', 'audio-library');
+  const assetDir = path.join(root, 'test-results', 'note-assets');
+  const noteImagePath = path.join(root, 'test-results', 'note-photo.png');
 
   for (const suffix of ['', '-wal', '-shm']) {
     fs.rmSync(`${db}${suffix}`, { force: true });
   }
   fs.rmSync(audioLibraryDir, { recursive: true, force: true });
+  fs.rmSync(assetDir, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(db), { recursive: true });
   fs.mkdirSync(audioLibraryDir, { recursive: true });
+  fs.writeFileSync(noteImagePath, tinyPng());
   ensureAudioFixture(fixtureAudio, 75);
   fs.rmSync(audio, { force: true });
   fs.copyFileSync(fixtureAudio, audio);
 
-  const app = await launchApp(exe, db);
+  const app = await launchApp(exe, db, assetDir);
 
   let imported;
   let appMenuRemoved = false;
@@ -44,6 +48,9 @@ async function main() {
   let aiArtifactHistoryVisible = false;
   let aiArtifactDeleteMenuVisible = false;
   let aiArtifactDeleted = false;
+  let libraryContextOpenFolderVisible = false;
+  let libraryContextDeleteVisible = false;
+  let libraryListCreatedDateVisible = false;
   let calendarDayVisible = false;
   let calendarDayDetailVisible = false;
   let calendarRecordingOpenedDetail = false;
@@ -56,9 +63,29 @@ async function main() {
   let audioLibraryFolderVisibleInLibrary = false;
   let transcriptEditPersisted = false;
   let transcriptEditSearchUpdated = false;
+  let noteCreated = false;
+  let notePersisted = false;
+  let noteSearchUpdated = false;
+  let noteBoldTogglePersistsForTyping = false;
+  let noteBoldButtonActiveAfterToggle = false;
+  let noteItalicTogglePersistsForTyping = false;
+  let noteItalicButtonActiveAfterToggle = false;
+  let noteImageImported = false;
+  let noteImageRendered = false;
+  let noteToolbarEnhancedVisible = false;
+  let noteBlankAreaEditable = false;
+  let calendarNoteVisible = false;
+  let calendarNoteOpenedDetail = false;
+  const rendererErrors = [];
 
   try {
     const win = await app.firstWindow();
+    win.on('pageerror', (error) => rendererErrors.push(error.message));
+    win.on('console', (message) => {
+      if (message.type() === 'error') {
+        rendererErrors.push(message.text());
+      }
+    });
     await win.waitForLoadState('domcontentloaded');
     await win.waitForTimeout(1000);
     appMenuRemoved = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null);
@@ -77,6 +104,19 @@ async function main() {
     await win.waitForTimeout(1000);
     await win.getByText('phase1-transcript-long-中文-test').first().click();
     await win.waitForTimeout(500);
+    const expectedLibraryDate = await win.evaluate((id) => {
+      return window.distillAPI.getRecording(id).then((recording) => new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(new Date(recording.createdAt ?? recording.importedAt)));
+    }, imported.recording.id);
+    libraryListCreatedDateVisible = await win.getByText(expectedLibraryDate).first().isVisible();
+    await win.getByText('phase1-transcript-long-中文-test').first().click({ button: 'right' });
+    libraryContextOpenFolderVisible = await win.getByRole('button', { name: '打开所在文件夹' }).isVisible();
+    libraryContextDeleteVisible = await win.getByRole('button', { name: '删除', exact: true }).isVisible();
+    await win.keyboard.press('Escape');
     const calendarDate = await win.evaluate((id) => {
       const pad = (value) => String(value).padStart(2, '0');
       return window.distillAPI.getRecording(id).then((recording) => {
@@ -87,7 +127,7 @@ async function main() {
     await win.getByRole('button', { name: 'Calendar' }).click();
     await win.getByText('按录音创建日期展示记录分布').waitFor();
     const calendarDay = win.locator(`[data-testid="calendar-day"][data-date="${calendarDate}"]`);
-    await calendarDay.getByText('条记录').waitFor();
+    await calendarDay.getByText('个项目').waitFor();
     calendarDayVisible = true;
     await calendarDay.click();
     const calendarRecording = win.locator(`[data-testid="calendar-recording-row"][data-recording-id="${imported.recording.id}"]`);
@@ -106,6 +146,80 @@ async function main() {
     await win.getByRole('button', { name: 'Settings', exact: true }).click();
     await win.getByText('phase1-transcript-long-中文-test').first().waitFor();
     await expectNoInboxEntry(win);
+    await win.getByRole('button', { name: 'New Note' }).click();
+    await win.getByTestId('note-title-input').fill('测试文本笔记');
+    await win.locator('section').filter({ has: win.getByTestId('note-editor') }).click({ position: { x: 20, y: 180 } });
+    await win.getByTitle('Bold').click();
+    await win.waitForFunction(() => document.querySelector('button[title="Bold"]')?.getAttribute('aria-pressed') === 'true');
+    noteBoldButtonActiveAfterToggle = await win.getByTitle('Bold').getAttribute('aria-pressed') === 'true';
+    await win.keyboard.type('粗体开关测试');
+    noteBoldTogglePersistsForTyping = await win.getByTestId('note-editor').locator('strong').filter({ hasText: '粗体开关测试' }).count() > 0;
+    await win.getByTitle('Bold').click();
+    await win.waitForFunction(() => document.querySelector('button[title="Bold"]')?.getAttribute('aria-pressed') === 'false');
+    await win.getByTitle('Italic').click();
+    await win.waitForFunction(() => document.querySelector('button[title="Italic"]')?.getAttribute('aria-pressed') === 'true');
+    noteItalicButtonActiveAfterToggle = await win.getByTitle('Italic').getAttribute('aria-pressed') === 'true';
+    await win.keyboard.type('斜体开关测试');
+    noteItalicTogglePersistsForTyping = await win.getByTestId('note-editor').locator('em').filter({ hasText: '斜体开关测试' }).count() > 0;
+    await win.getByTitle('Italic').click();
+    await win.waitForFunction(() => document.querySelector('button[title="Italic"]')?.getAttribute('aria-pressed') === 'false');
+    await win.keyboard.type('这是一条和音频放在同一个 Library 里的人工文本笔记。');
+    await win.getByText('Saved').waitFor({ timeout: 5000 });
+    const libraryItemsAfterNote = await win.evaluate(() => window.distillAPI.listLibraryItems());
+    const noteItem = libraryItemsAfterNote.find((item) => item.kind === 'note' && item.title === '测试文本笔记');
+    noteCreated = Boolean(noteItem);
+    notePersisted = Boolean(noteItem?.preview.includes('人工文本笔记'));
+    const noteSearchResults = await win.evaluate(() => window.distillAPI.searchLibraryItems('人工文本笔记'));
+    noteSearchUpdated = noteSearchResults.some((item) => item.kind === 'note' && item.title === '测试文本笔记');
+    noteBlankAreaEditable = noteSearchUpdated;
+    noteToolbarEnhancedVisible =
+      await win.getByTitle('Insert Photo').isVisible() &&
+      await win.getByTitle('Task List').isVisible() &&
+      await win.getByTitle('Link').isVisible();
+    if (noteItem) {
+      const imageImport = await win.evaluate((filePath) => window.distillAPI.importNoteImageFromPath({ filePath }), noteImagePath);
+      noteImageImported = imageImport.src.startsWith('distill-asset://note-image/');
+      await win.evaluate(({ noteId, imageSrc }) => window.distillAPI.updateNote({
+        noteId,
+        title: '测试图片笔记',
+        plainText: '包含图片的笔记',
+        contentJson: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: '包含图片的笔记' }]
+            },
+            {
+              type: 'image',
+              attrs: { src: imageSrc, alt: '图片测试' }
+            }
+          ]
+        }
+      }), { noteId: noteItem.id, imageSrc: imageImport.src });
+      await win.evaluate(() => window.location.reload());
+      await win.waitForLoadState('domcontentloaded');
+      await win.waitForTimeout(1000);
+      await win.getByText('测试图片笔记').first().click();
+      await win.locator('[data-testid="note-editor"] img').waitFor();
+      noteImageRendered = await win.locator('[data-testid="note-editor"] img').evaluate((image) => image.complete && image.naturalWidth > 0);
+      const todayDate = await win.evaluate(() => {
+        const date = new Date();
+        const pad = (value) => String(value).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+      });
+      await win.getByRole('button', { name: 'Calendar' }).click();
+      const noteCalendarDay = win.locator(`[data-testid="calendar-day"][data-date="${todayDate}"]`);
+      await noteCalendarDay.getByText('笔记').waitFor();
+      calendarNoteVisible = true;
+      await noteCalendarDay.click();
+      await win.getByText('测试图片笔记').first().waitFor();
+      await win.getByText('测试图片笔记').first().click();
+      await win.getByTestId('note-title-input').waitFor();
+      calendarNoteOpenedDetail = true;
+    }
+    await win.getByRole('button', { name: 'Library' }).click();
+    await win.getByText('phase1-transcript-long-中文-test').first().click();
     fs.copyFileSync(audio, path.join(audioLibraryDir, 'audio-library-auto.m4a'));
     const watchedRecordings = await waitForRecordingCount(win, 2, 30000);
     const watchedRecording = watchedRecordings.find((recording) => {
@@ -235,7 +349,7 @@ async function main() {
     await app.close();
   }
 
-  const reopenedApp = await launchApp(exe, db);
+  const reopenedApp = await launchApp(exe, db, assetDir);
   let reopenedText = '';
   try {
     const win = await reopenedApp.firstWindow();
@@ -274,6 +388,9 @@ async function main() {
         aiArtifactHistoryVisible,
         aiArtifactDeleteMenuVisible,
         aiArtifactDeleted,
+        libraryContextOpenFolderVisible,
+        libraryContextDeleteVisible,
+        libraryListCreatedDateVisible,
         calendarDayVisible,
         calendarDayDetailVisible,
         calendarRecordingOpenedDetail,
@@ -286,7 +403,21 @@ async function main() {
         audioLibraryFolderVisibleInLibrary,
         transcriptEditPersisted,
         transcriptEditSearchUpdated,
-        hasLibraryText: text.includes('Voice Library'),
+        noteCreated,
+        notePersisted,
+        noteSearchUpdated,
+        noteBoldTogglePersistsForTyping,
+        noteBoldButtonActiveAfterToggle,
+        noteItalicTogglePersistsForTyping,
+        noteItalicButtonActiveAfterToggle,
+        noteImageImported,
+        noteImageRendered,
+        noteToolbarEnhancedVisible,
+        noteBlankAreaEditable,
+        calendarNoteVisible,
+        calendarNoteOpenedDetail,
+        rendererErrorCount: rendererErrors.length,
+        hasLibraryText: text.includes('Library'),
         hasDetailText: text.includes('phase1-transcript-long-中文-test'),
         hasSpeechToTextStatus: settingsText.includes('Mock STT ready'),
         autoTranscribedAfterImport: Boolean(imported.recording.jobs.find((job) => job.kind === 'transcription')),
@@ -335,6 +466,48 @@ async function main() {
   if (!transcriptEditSearchUpdated) {
     throw new Error('Expected transcript search to include the edited transcript text.');
   }
+  if (!noteCreated) {
+    throw new Error('Expected New Note to create a text note in Library.');
+  }
+  if (!notePersisted) {
+    throw new Error('Expected text note content to persist in the Library list preview.');
+  }
+  if (!noteSearchUpdated) {
+    throw new Error('Expected text note content to be searchable from Library search.');
+  }
+  if (!noteBoldTogglePersistsForTyping) {
+    throw new Error('Expected toggling Bold before typing to make following note text bold.');
+  }
+  if (!noteBoldButtonActiveAfterToggle) {
+    throw new Error('Expected Bold toolbar button to show active state after toggling Bold.');
+  }
+  if (!noteItalicTogglePersistsForTyping) {
+    throw new Error('Expected toggling Italic before typing to make following note text italic.');
+  }
+  if (!noteItalicButtonActiveAfterToggle) {
+    throw new Error('Expected Italic toolbar button to show active state after toggling Italic.');
+  }
+  if (!noteBlankAreaEditable) {
+    throw new Error('Expected clicking the blank note editor area to focus and accept text input.');
+  }
+  if (!noteToolbarEnhancedVisible) {
+    throw new Error('Expected enhanced note toolbar actions to be visible.');
+  }
+  if (!noteImageImported) {
+    throw new Error('Expected note image import to copy a local image into managed assets.');
+  }
+  if (!noteImageRendered) {
+    throw new Error('Expected imported note image to render in the note editor.');
+  }
+  if (!calendarNoteVisible) {
+    throw new Error('Expected Calendar to show notes on their creation date.');
+  }
+  if (!calendarNoteOpenedDetail) {
+    throw new Error('Expected clicking a Calendar note to open the note editor.');
+  }
+  if (rendererErrors.length > 0) {
+    throw new Error(`Expected no renderer errors, got: ${rendererErrors.join('\n')}`);
+  }
   if (!retranscribeStartedFresh) {
     throw new Error('Expected Retranscribe to create a fresh running transcription job.');
   }
@@ -358,6 +531,15 @@ async function main() {
   }
   if (!aiArtifactDeleted) {
     throw new Error('Expected AI artifact history Delete action to remove the selected artifact.');
+  }
+  if (!libraryContextOpenFolderVisible) {
+    throw new Error('Expected Library recording context menu to show Open in Folder.');
+  }
+  if (!libraryContextDeleteVisible) {
+    throw new Error('Expected Library recording context menu to show Delete.');
+  }
+  if (!libraryListCreatedDateVisible) {
+    throw new Error('Expected Library recording list to show the recording creation date.');
   }
   if (!calendarDayVisible) {
     throw new Error('Expected Calendar to show the imported recording date.');
@@ -470,12 +652,13 @@ function isPathInsideDirectory(filePath, directoryPath) {
   return relativePath.length > 0 && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
 }
 
-function launchApp(exe, db) {
+function launchApp(exe, db, assetDir) {
   return _electron.launch({
     executablePath: exe,
     env: {
       ...process.env,
       DISTILL_DB_PATH: db,
+      DISTILL_ASSET_DIR: assetDir,
       DISTILL_STT_PROVIDER: 'mock',
       DISTILL_ALLOW_MOCK_STT: 'true',
       DISTILL_MOCK_STT_DELAY_MS: '1500',
@@ -485,6 +668,13 @@ function launchApp(exe, db) {
       DISTILL_MOCK_LLM_DELAY_MS: '1500'
     }
   });
+}
+
+function tinyPng() {
+  return Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lpXW8QAAAABJRU5ErkJggg==',
+    'base64'
+  );
 }
 
 async function waitForTranscript(win, recordingId, timeoutMs) {

@@ -1,20 +1,37 @@
-import { useEffect, useRef, useState } from 'react';
+import { Component, useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent, MouseEvent } from 'react';
-import { AlertCircle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, FileAudio, FolderOpen, Import, Library, Pencil, RefreshCw, Save, Search, Settings, Trash2, Upload, X, XCircle } from 'lucide-react';
-import type { AIArtifact, AIArtifactTemplate, ProcessingJob, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
+import { EditorContent, useEditor, type Editor, type JSONContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Image from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
+import TaskItem from '@tiptap/extension-task-item';
+import TaskList from '@tiptap/extension-task-list';
+import Underline from '@tiptap/extension-underline';
+import { AlertCircle, Bold, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Code2, Clock3, FileAudio, FileText, FolderOpen, Heading1, Heading2, Image as ImageIcon, Import, Italic, Library, Link2, List, ListChecks, ListOrdered, Minus, Pencil, Plus, Quote, Redo2, RefreshCw, Save, Search, Settings, Strikethrough, Trash2, Underline as UnderlineIcon, Undo2, Upload, X, XCircle } from 'lucide-react';
+import type { AIArtifact, AIArtifactTemplate, LibraryCalendarDay, LibraryItem, NoteDetail, ProcessingJob, RecordingDetail, RecordingListItem, RichTextDocument, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { cn } from '@renderer/lib/utils';
 import { useLibraryStore } from '@renderer/stores/libraryStore';
 
 export function App() {
+  return (
+    <AppErrorBoundary>
+      <AppShell />
+    </AppErrorBoundary>
+  );
+}
+
+function AppShell() {
   const {
+    libraryItems,
     recordings,
     selectedRecording,
+    selectedNote,
     calendarMonth,
     calendarDays,
     selectedCalendarDate,
-    calendarRecordings,
+    calendarItems,
     aiTemplates,
     settings,
     speechToTextStatus,
@@ -30,10 +47,16 @@ export function App() {
     error,
     load,
     selectRecording,
+    createNote,
+    selectNote,
+    saveNote,
+    deleteNote,
     importFromDialog,
     importFromPaths,
     transcribeRecording,
     editTranscriptSegment,
+    revealRecordingInFolder,
+    deleteRecording,
     generateArtifact,
     deleteAIArtifact,
     search,
@@ -116,14 +139,24 @@ export function App() {
         onSettings={() => void showSettings()}
         importing={importing}
       />
-      <LibraryPane
-        recordings={recordings}
-        selectedId={selectedRecording?.id ?? null}
-        loading={loading}
-        importing={importing}
-        onSelect={(id) => void selectRecording(id)}
-        onImport={() => void importFromDialog()}
-      />
+          <LibraryPane
+            items={libraryItems}
+            selectedKey={selectedNote ? libraryItemKey('note', selectedNote.id) : selectedRecording ? libraryItemKey('recording', selectedRecording.id) : null}
+            loading={loading}
+            importing={importing}
+            onSelect={(item) => {
+              if (item.kind === 'recording') {
+                void selectRecording(item.id);
+              } else {
+                void selectNote(item.id);
+              }
+            }}
+            onRevealInFolder={(id) => void revealRecordingInFolder(id)}
+            onDeleteRecording={(id) => void deleteRecording(id)}
+            onDeleteNote={(id) => void deleteNote(id)}
+            onImport={() => void importFromDialog()}
+            onCreateNote={() => void createNote()}
+          />
       <main className="min-h-0 min-w-0 border-l border-border bg-surface-elevated">
         {error ? <ErrorBanner message={error} /> : null}
         {viewMode === 'settings' ? (
@@ -140,7 +173,7 @@ export function App() {
             month={calendarMonth}
             days={calendarDays}
             selectedDate={selectedCalendarDate}
-            recordings={calendarRecordings}
+            items={calendarItems}
             loading={calendarLoading}
             onMonthChange={(year, month) => void loadCalendarMonth(year, month)}
             onToday={() => {
@@ -149,7 +182,18 @@ export function App() {
               void loadCalendarMonth(year, month).then(() => selectCalendarDate(today));
             }}
             onSelectDate={(date) => void selectCalendarDate(date)}
-            onSelectRecording={(id) => void selectRecording(id)}
+            onSelectItem={(item) => {
+              if (item.kind === 'recording') {
+                void selectRecording(item.id);
+              } else {
+                void selectNote(item.id);
+              }
+            }}
+          />
+        ) : selectedNote ? (
+          <NoteDetailPane
+            note={selectedNote}
+            onSave={saveNote}
           />
         ) : (
           <RecordingDetailPane
@@ -159,6 +203,7 @@ export function App() {
             isTranscribing={selectedRecording ? Boolean(transcribingIds[selectedRecording.id]) : false}
             isGeneratingArtifact={selectedRecording ? Boolean(generatingArtifactIds[selectedRecording.id]) : false}
             onImport={() => void importFromDialog()}
+            onCreateNote={() => void createNote()}
             onTranscribe={(id) => void transcribeRecording(id)}
             onEditTranscriptSegment={(recordingId, transcriptId, segmentId, text) => editTranscriptSegment(recordingId, transcriptId, segmentId, text)}
             onGenerateArtifact={(id, templateId) => void generateArtifact(id, templateId)}
@@ -221,7 +266,7 @@ function Sidebar(props: {
         <Search className="h-4 w-4 text-muted-foreground" />
         <input
           className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          placeholder="Search recordings"
+          placeholder="Search library"
           value={props.query}
           onChange={(event) => props.onQueryChange(event.target.value)}
         />
@@ -256,65 +301,195 @@ function SidebarItem(props: { icon: React.ReactNode; label: string; active?: boo
 }
 
 function LibraryPane(props: {
-  recordings: RecordingListItem[];
-  selectedId: string | null;
+  items: LibraryItem[];
+  selectedKey: string | null;
   loading: boolean;
   importing: boolean;
-  onSelect(id: string): void;
+  onSelect(item: LibraryItem): void;
+  onRevealInFolder(id: string): void;
+  onDeleteRecording(id: string): void;
+  onDeleteNote(id: string): void;
   onImport(): void;
+  onCreateNote(): void;
 }) {
+  const [contextMenu, setContextMenu] = useState<{ key: string; x: number; y: number } | null>(null);
+  const contextItem = contextMenu ? props.items.find((item) => libraryItemKey(item.kind, item.id) === contextMenu.key) ?? null : null;
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    function closeMenu() {
+      setContextMenu(null);
+    }
+
+    function closeMenuOnEscape(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') {
+        closeMenu();
+      }
+    }
+
+    window.addEventListener('click', closeMenu);
+    window.addEventListener('contextmenu', closeMenu);
+    window.addEventListener('keydown', closeMenuOnEscape);
+    return () => {
+      window.removeEventListener('click', closeMenu);
+      window.removeEventListener('contextmenu', closeMenu);
+      window.removeEventListener('keydown', closeMenuOnEscape);
+    };
+  }, [contextMenu]);
+
+  function openContextMenu(event: MouseEvent, item: LibraryItem) {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      key: libraryItemKey(item.kind, item.id),
+      x: Math.min(event.clientX, window.innerWidth - 220),
+      y: Math.min(event.clientY, window.innerHeight - 100)
+    });
+  }
+
+  function revealContextRecording() {
+    if (!contextItem || contextItem.kind !== 'recording') {
+      return;
+    }
+    props.onRevealInFolder(contextItem.id);
+    setContextMenu(null);
+  }
+
+  function deleteContextItem() {
+    if (!contextItem) {
+      return;
+    }
+    const confirmed = window.confirm(contextItem.kind === 'recording'
+      ? '删除这条录音？如果音频位于音频库文件夹内，文件副本会同时移到回收站。'
+      : '删除这条笔记？');
+    if (!confirmed) {
+      return;
+    }
+    if (contextItem.kind === 'recording') {
+      props.onDeleteRecording(contextItem.id);
+    } else {
+      props.onDeleteNote(contextItem.id);
+    }
+    setContextMenu(null);
+  }
+
   return (
     <section className="flex min-h-0 min-w-0 flex-col bg-background">
       <header className="flex h-14 items-center justify-between border-b border-border px-4">
         <div>
-          <h1 className="text-base font-semibold">Voice Library</h1>
-          <p className="text-xs text-muted-foreground">{props.recordings.length} recordings</p>
+          <h1 className="text-base font-semibold">Library</h1>
+          <p className="text-xs text-muted-foreground">{props.items.length} items</p>
         </div>
-        <Button variant="secondary" size="sm" onClick={props.onImport} disabled={props.importing}>
-          <Upload className="h-4 w-4" />
-          Import
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="icon" title="New Note" aria-label="New Note" onClick={props.onCreateNote}>
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button variant="secondary" size="sm" onClick={props.onImport} disabled={props.importing}>
+            <Upload className="h-4 w-4" />
+            Import
+          </Button>
+        </div>
       </header>
 
-      {props.loading && props.recordings.length === 0 ? (
+      {props.loading && props.items.length === 0 ? (
         <div className="px-4 py-5 text-sm text-muted-foreground">Loading library...</div>
-      ) : props.recordings.length === 0 ? (
-        <EmptyLibrary onImport={props.onImport} importing={props.importing} />
+      ) : props.items.length === 0 ? (
+        <EmptyLibrary onImport={props.onImport} onCreateNote={props.onCreateNote} importing={props.importing} />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {props.recordings.map((recording) => (
-            <RecordingRow key={recording.id} recording={recording} selected={recording.id === props.selectedId} onClick={() => props.onSelect(recording.id)} />
+          {props.items.map((item) => (
+            <LibraryItemRow
+              key={libraryItemKey(item.kind, item.id)}
+              item={item}
+              selected={libraryItemKey(item.kind, item.id) === props.selectedKey}
+              onClick={() => props.onSelect(item)}
+              onContextMenu={(event) => openContextMenu(event, item)}
+            />
           ))}
         </div>
       )}
+      {contextMenu && contextItem ? (
+        <div
+          className="fixed z-50 w-52 rounded border border-border bg-background py-1 text-sm shadow-lg"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          {contextItem.kind === 'recording' ? (
+            <button className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted" onClick={revealContextRecording}>
+              <FolderOpen className="h-4 w-4" />
+              打开所在文件夹
+            </button>
+          ) : null}
+          <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-destructive hover:bg-muted" onClick={deleteContextItem}>
+            <Trash2 className="h-4 w-4" />
+            删除
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
 
-function EmptyLibrary(props: { onImport(): void; importing: boolean }) {
+class AppErrorBoundary extends Component<{ children: React.ReactNode }, { error: string | null }> {
+  state = { error: null };
+
+  static getDerivedStateFromError(error: unknown): { error: string } {
+    return { error: error instanceof Error ? error.message : 'Renderer crashed.' };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center bg-background px-8 text-center text-foreground">
+          <AlertCircle className="mb-4 h-10 w-10 text-destructive" />
+          <h1 className="text-lg font-semibold">界面出错了</h1>
+          <p className="mt-2 max-w-[520px] text-sm leading-6 text-muted-foreground">{this.state.error}</p>
+          <Button className="mt-5" variant="secondary" onClick={() => window.location.reload()}>
+            <RefreshCw className="h-4 w-4" />
+            Reload
+          </Button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function EmptyLibrary(props: { onImport(): void; onCreateNote(): void; importing: boolean }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-8 text-center">
-      <FileAudio className="mb-4 h-10 w-10 text-muted-foreground" />
-      <h2 className="text-base font-semibold">No recordings yet</h2>
-      <p className="mt-2 max-w-[260px] text-sm leading-6 text-muted-foreground">Drop an M4A file here, or import one from disk.</p>
-      <Button className="mt-5" onClick={props.onImport} disabled={props.importing}>
-        <Import className="h-4 w-4" />
-        Import Recording
-      </Button>
+      <Library className="mb-4 h-10 w-10 text-muted-foreground" />
+      <h2 className="text-base font-semibold">No items yet</h2>
+      <p className="mt-2 max-w-[260px] text-sm leading-6 text-muted-foreground">Drop an audio file here, import one from disk, or start a text note.</p>
+      <div className="mt-5 flex items-center gap-2">
+        <Button onClick={props.onCreateNote}>
+          <Plus className="h-4 w-4" />
+          New Note
+        </Button>
+        <Button variant="secondary" onClick={props.onImport} disabled={props.importing}>
+          <Import className="h-4 w-4" />
+          Import
+        </Button>
+      </div>
     </div>
   );
 }
 
 function CalendarPane(props: {
   month: { year: number; month: number };
-  days: RecordingCalendarDay[];
+  days: LibraryCalendarDay[];
   selectedDate: string | null;
-  recordings: RecordingListItem[];
+  items: LibraryItem[];
   loading: boolean;
   onMonthChange(year: number, month: number): void;
   onToday(): void;
   onSelectDate(date: string): void;
-  onSelectRecording(id: string): void;
+  onSelectItem(item: LibraryItem): void;
 }) {
   const today = localDateKey(new Date());
   const cells = calendarCells(props.month.year, props.month.month);
@@ -364,8 +539,8 @@ function CalendarPane(props: {
                 <span className={cn('text-sm tabular-nums', isToday && 'font-semibold text-accent')}>{cell.dayNumber}</span>
                 {day ? (
                   <span className="mt-auto min-w-0">
-                    <span className="block truncate text-xs font-medium text-foreground">{day.recordingCount} 条记录</span>
-                    <span className="block truncate text-xs text-muted-foreground">{formatDuration(day.totalDuration)}</span>
+                    <span className="block truncate text-xs font-medium text-foreground">{day.itemCount} 个项目</span>
+                    <span className="block truncate text-xs text-muted-foreground">{formatCalendarDayCounts(day)}</span>
                   </span>
                 ) : null}
               </button>
@@ -377,33 +552,39 @@ function CalendarPane(props: {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">{selectedLabel}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {props.selectedDate ? `${props.recordings.length} 条录音` : '点击日期查看当天录音'}
+          <p className="mt-1 text-sm text-muted-foreground">
+                {props.selectedDate ? `${props.items.length} 个项目` : '点击日期查看当天项目'}
               </p>
             </div>
             {props.loading ? <span className="text-sm text-muted-foreground">Loading...</span> : null}
           </div>
 
-          {props.selectedDate && props.recordings.length > 0 ? (
+          {props.selectedDate && props.items.length > 0 ? (
             <div className="mt-4 divide-y divide-border">
-              {props.recordings.map((recording) => (
+              {props.items.map((item) => (
                 <button
-                  key={recording.id}
+                  key={libraryItemKey(item.kind, item.id)}
                   data-testid="calendar-recording-row"
-                  data-recording-id={recording.id}
+                  data-recording-id={item.kind === 'recording' ? item.id : undefined}
+                  data-testid-calendar-item={item.kind}
                   className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-4 px-1 py-3 text-left hover:bg-muted"
-                  onClick={() => props.onSelectRecording(recording.id)}
+                  onClick={() => props.onSelectItem(item)}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">{recording.title}</span>
-                    <span className="mt-1 block truncate text-xs text-muted-foreground">{recording.originalFileName}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      {item.kind === 'recording' ? <FileAudio className="h-4 w-4 shrink-0 text-accent" /> : <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                      <span className="block truncate text-sm font-medium">{item.title}</span>
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-muted-foreground">{item.preview}</span>
                   </span>
-                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatDuration(recording.duration)}</span>
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {item.kind === 'recording' ? formatDuration(item.duration) : formatShortDateTime(item.updatedAt)}
+                  </span>
                 </button>
               ))}
             </div>
           ) : props.selectedDate ? (
-            <p className="mt-4 text-sm text-muted-foreground">这一天没有录音。</p>
+            <p className="mt-4 text-sm text-muted-foreground">这一天没有项目。</p>
           ) : null}
         </section>
       </div>
@@ -411,8 +592,14 @@ function CalendarPane(props: {
   );
 }
 
-function RecordingRow(props: { recording: RecordingListItem; selected: boolean; onClick(): void }) {
-  const date = new Intl.DateTimeFormat(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(props.recording.importedAt));
+function LibraryItemRow(props: { item: LibraryItem; selected: boolean; onClick(): void; onContextMenu(event: MouseEvent): void }) {
+  const icon = props.item.kind === 'recording'
+    ? <FileAudio className="h-4 w-4 shrink-0 text-accent" />
+    : <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />;
+  const date = props.item.kind === 'recording' ? formatRecordingListDate(props.item) : formatShortDateTime(props.item.updatedAt);
+  const meta = props.item.kind === 'recording' ? `${formatFileSize(props.item.fileSize)} · ${props.item.processingState}` : 'Text note';
+  const duration = props.item.kind === 'recording' ? formatDuration(props.item.duration) : null;
+  const preview = props.item.preview || (props.item.kind === 'recording' ? props.item.originalFileName : 'No text yet');
 
   return (
     <button
@@ -421,18 +608,323 @@ function RecordingRow(props: { recording: RecordingListItem; selected: boolean; 
         props.selected && 'bg-muted'
       )}
       onClick={props.onClick}
+      onContextMenu={props.onContextMenu}
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
-        <div className="min-w-0 truncate text-sm font-medium">{props.recording.title}</div>
-        <div className="shrink-0 text-xs text-muted-foreground">{formatDuration(props.recording.duration)}</div>
+        <div className="flex min-w-0 items-center gap-2">
+          {icon}
+          <span className="min-w-0 truncate text-sm font-medium">{props.item.title}</span>
+        </div>
+        {duration ? <div className="shrink-0 text-xs text-muted-foreground">{duration}</div> : null}
       </div>
       <div className="mt-1 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span className="min-w-0 truncate">{props.recording.originalFileName}</span>
+        <span className="min-w-0 truncate">{preview}</span>
         <span className="shrink-0">{date}</span>
       </div>
-      <div className="mt-2 text-xs text-muted-foreground">{formatFileSize(props.recording.fileSize)} · {props.recording.processingState}</div>
+      <div className="mt-2 text-xs text-muted-foreground">{meta}</div>
     </button>
   );
+}
+
+function NoteDetailPane(props: {
+  note: NoteDetail;
+  onSave(noteId: string, title: string, contentJson: RichTextDocument, plainText: string): Promise<void>;
+}) {
+  const { note, onSave } = props;
+  const [title, setTitle] = useState(note.title);
+  const [revision, setRevision] = useState(0);
+  const [toolbarRevision, setToolbarRevision] = useState(0);
+  const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved');
+  const activeNoteId = useRef(note.id);
+  const pendingSignature = useRef<string | null>(null);
+  const lastSavedSignature = useRef(noteSignature(note.title, note.contentJson, note.plainText));
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        defaultProtocol: 'https'
+      }),
+      Image.configure({
+        allowBase64: false
+      }),
+      TaskList,
+      TaskItem.configure({
+        nested: true
+      })
+    ],
+    content: toEditorContent(note.contentJson),
+    editorProps: {
+      attributes: {
+        class: 'note-editor-content min-h-full outline-none'
+      }
+    },
+    onUpdate: () => setRevision((current) => current + 1)
+  }, [note.id]);
+
+  useEffect(() => {
+    if (!editor) {
+      return undefined;
+    }
+
+    const refreshToolbar = () => setToolbarRevision((current) => current + 1);
+    editor.on('transaction', refreshToolbar);
+    editor.on('selectionUpdate', refreshToolbar);
+    editor.on('focus', refreshToolbar);
+    editor.on('blur', refreshToolbar);
+
+    return () => {
+      editor.off('transaction', refreshToolbar);
+      editor.off('selectionUpdate', refreshToolbar);
+      editor.off('focus', refreshToolbar);
+      editor.off('blur', refreshToolbar);
+    };
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor || activeNoteId.current === note.id) {
+      return;
+    }
+
+    activeNoteId.current = note.id;
+    pendingSignature.current = null;
+    setTitle(note.title);
+    lastSavedSignature.current = noteSignature(note.title, note.contentJson, note.plainText);
+    setSaveState('saved');
+    editor.commands.setContent(toEditorContent(note.contentJson), { emitUpdate: false });
+    window.setTimeout(() => editor.commands.focus('end'), 0);
+  }, [editor, note.id, note.title, note.contentJson, note.plainText]);
+
+  useEffect(() => {
+    if (note.id !== activeNoteId.current) {
+      return;
+    }
+
+    const savedSignature = noteSignature(note.title, note.contentJson, note.plainText);
+    if (!pendingSignature.current || pendingSignature.current === savedSignature) {
+      lastSavedSignature.current = savedSignature;
+      pendingSignature.current = null;
+      if (saveState === 'saving') {
+        setSaveState('saved');
+      }
+    }
+  }, [note.id, note.title, note.contentJson, note.plainText, saveState]);
+
+  useEffect(() => {
+    if (!editor) {
+      return undefined;
+    }
+
+    const contentJson = editor.getJSON() as RichTextDocument;
+    const plainText = editor.getText({ blockSeparator: '\n' });
+    const nextTitle = title.trim() || 'Untitled Note';
+    const nextSignature = noteSignature(nextTitle, contentJson, plainText);
+    if (nextSignature === lastSavedSignature.current) {
+      setSaveState('saved');
+      return undefined;
+    }
+
+    setSaveState('saving');
+    pendingSignature.current = nextSignature;
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      void onSave(note.id, nextTitle, contentJson, plainText)
+        .then(() => {
+          if (!cancelled) {
+            lastSavedSignature.current = nextSignature;
+            pendingSignature.current = null;
+            setSaveState('saved');
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSaveState('error');
+          }
+        });
+    }, 900);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [editor, note.id, onSave, revision, title]);
+
+  return (
+    <article className="flex h-full min-h-0 min-w-0 flex-col bg-surface-elevated">
+      <header className="border-b border-border px-8 py-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <input
+              data-testid="note-title-input"
+              className="h-10 w-full min-w-0 bg-transparent text-2xl font-semibold leading-tight outline-none placeholder:text-muted-foreground"
+              value={title}
+              placeholder="Untitled Note"
+              onChange={(event) => setTitle(event.target.value)}
+            />
+            <p className="mt-1 text-sm text-muted-foreground">Updated {formatShortDateTime(note.updatedAt)}</p>
+          </div>
+          <div className={cn('shrink-0 pt-2 text-xs', saveState === 'error' ? 'text-destructive' : 'text-muted-foreground')}>
+            {saveState === 'saving' ? 'Saving...' : saveState === 'error' ? 'Save failed' : 'Saved'}
+          </div>
+        </div>
+        <NoteEditorToolbar editor={editor} revision={toolbarRevision} />
+      </header>
+      <section
+        className="stable-scrollbar min-h-0 flex-1 overflow-y-scroll px-8 py-7"
+        onMouseDown={(event) => {
+          const target = event.target as HTMLElement;
+          if (!target.closest('.ProseMirror')) {
+            event.preventDefault();
+            editor?.commands.focus('end');
+          }
+        }}
+      >
+        <EditorContent data-testid="note-editor" className="min-h-full" editor={editor} />
+      </section>
+    </article>
+  );
+}
+
+function NoteEditorToolbar(props: { editor: Editor | null; revision: number }) {
+  const editor = props.editor;
+  const disabled = !editor;
+  return (
+    <div data-toolbar-revision={props.revision} className="mt-4 flex flex-wrap items-center gap-1 border-t border-border pt-3">
+      <ToolbarButton title="Bold" disabled={disabled} active={editor?.isActive('bold')} onClick={() => editor?.chain().focus().toggleBold().run()}>
+        <Bold className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Italic" disabled={disabled} active={editor?.isActive('italic')} onClick={() => editor?.chain().focus().toggleItalic().run()}>
+        <Italic className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Underline" disabled={disabled} active={editor?.isActive('underline')} onClick={() => editor?.chain().focus().toggleUnderline().run()}>
+        <UnderlineIcon className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Strike" disabled={disabled} active={editor?.isActive('strike')} onClick={() => editor?.chain().focus().toggleStrike().run()}>
+        <Strikethrough className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Inline Code" disabled={disabled} active={editor?.isActive('code')} onClick={() => editor?.chain().focus().toggleCode().run()}>
+        <Code2 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Heading 1" disabled={disabled} active={editor?.isActive('heading', { level: 1 })} onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}>
+        <Heading1 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Heading 2" disabled={disabled} active={editor?.isActive('heading', { level: 2 })} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
+        <Heading2 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Bullet List" disabled={disabled} active={editor?.isActive('bulletList')} onClick={() => editor?.chain().focus().toggleBulletList().run()}>
+        <List className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Numbered List" disabled={disabled} active={editor?.isActive('orderedList')} onClick={() => editor?.chain().focus().toggleOrderedList().run()}>
+        <ListOrdered className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Task List" disabled={disabled} active={editor?.isActive('taskList')} onClick={() => editor?.chain().focus().toggleTaskList().run()}>
+        <ListChecks className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Quote" disabled={disabled} active={editor?.isActive('blockquote')} onClick={() => editor?.chain().focus().toggleBlockquote().run()}>
+        <Quote className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Code Block" disabled={disabled} active={editor?.isActive('codeBlock')} onClick={() => editor?.chain().focus().toggleCodeBlock().run()}>
+        <Code2 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Divider" disabled={disabled} onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
+        <Minus className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Link" disabled={disabled} active={editor?.isActive('link')} onClick={() => setNoteLink(editor)}>
+        <Link2 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Insert Photo" disabled={disabled} onClick={() => void insertNoteImage(editor)}>
+        <ImageIcon className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Undo" disabled={disabled || !editor?.can().undo()} onClick={() => editor?.chain().focus().undo().run()}>
+        <Undo2 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Redo" disabled={disabled || !editor?.can().redo()} onClick={() => editor?.chain().focus().redo().run()}>
+        <Redo2 className="h-4 w-4" />
+      </ToolbarButton>
+    </div>
+  );
+}
+
+function ToolbarButton(props: { title: string; active?: boolean; disabled?: boolean; onClick(): void; children: React.ReactNode }) {
+  const pressedByMouse = useRef(false);
+  const runAction = () => {
+    if (!props.disabled) {
+      props.onClick();
+    }
+  };
+
+  return (
+    <Button
+      size="icon"
+      variant={props.active ? 'default' : 'ghost'}
+      type="button"
+      title={props.title}
+      aria-pressed={Boolean(props.active)}
+      disabled={props.disabled}
+      onMouseDown={(event) => {
+        if (event.button !== 0) {
+          return;
+        }
+
+        event.preventDefault();
+        pressedByMouse.current = true;
+        runAction();
+      }}
+      onClick={(event) => {
+        if (pressedByMouse.current) {
+          pressedByMouse.current = false;
+          event.preventDefault();
+          return;
+        }
+
+        runAction();
+      }}
+    >
+      {props.children}
+    </Button>
+  );
+}
+
+function ToolbarDivider() {
+  return <div className="mx-1 h-6 w-px bg-border" />;
+}
+
+function setNoteLink(editor: Editor | null) {
+  if (!editor) {
+    return;
+  }
+
+  const previousUrl = editor.getAttributes('link').href as string | undefined;
+  const nextUrl = window.prompt('Link URL', previousUrl ?? '');
+  if (nextUrl === null) {
+    return;
+  }
+
+  const trimmed = nextUrl.trim();
+  if (!trimmed) {
+    editor.chain().focus().extendMarkRange('link').unsetLink().run();
+    return;
+  }
+
+  editor.chain().focus().extendMarkRange('link').setLink({ href: trimmed }).run();
+}
+
+async function insertNoteImage(editor: Editor | null): Promise<void> {
+  if (!editor) {
+    return;
+  }
+
+  const result = await window.distillAPI.importNoteImageFromDialog();
+  if (!result) {
+    return;
+  }
+
+  editor.chain().focus().setImage({ src: result.src, alt: result.fileName }).run();
 }
 
 function RecordingDetailPane(props: {
@@ -442,6 +934,7 @@ function RecordingDetailPane(props: {
   isTranscribing: boolean;
   isGeneratingArtifact: boolean;
   onImport(): void;
+  onCreateNote(): void;
   onTranscribe(id: string): void;
   onEditTranscriptSegment(recordingId: string, transcriptId: string, segmentId: string, text: string): Promise<void>;
   onGenerateArtifact(id: string, templateId: string): void;
@@ -483,12 +976,18 @@ function RecordingDetailPane(props: {
     return (
       <div className="flex h-full flex-col items-center justify-center px-8 text-center">
         <FileAudio className="mb-4 h-12 w-12 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Select or import a recording</h2>
-        <p className="mt-2 max-w-[360px] text-sm leading-6 text-muted-foreground">Your recording, transcript, and AI notes will live together here.</p>
-        <Button className="mt-5" onClick={props.onImport} disabled={props.importing}>
-          <Import className="h-4 w-4" />
-          Import Recording
-        </Button>
+        <h2 className="text-lg font-semibold">Select an item</h2>
+        <p className="mt-2 max-w-[360px] text-sm leading-6 text-muted-foreground">Recordings, transcripts, AI notes, and text notes live together in Library.</p>
+        <div className="mt-5 flex items-center gap-2">
+          <Button onClick={props.onCreateNote}>
+            <Plus className="h-4 w-4" />
+            New Note
+          </Button>
+          <Button variant="secondary" onClick={props.onImport} disabled={props.importing}>
+            <Import className="h-4 w-4" />
+            Import
+          </Button>
+        </div>
       </div>
     );
   }
@@ -1225,6 +1724,20 @@ function formatCalendarDateLabel(date: string): string {
   return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date(`${date}T12:00:00`));
 }
 
+function formatCalendarDayCounts(day: LibraryCalendarDay): string {
+  const parts = [];
+  if (day.recordingCount > 0) {
+    parts.push(`${day.recordingCount} 录音`);
+  }
+  if (day.noteCount > 0) {
+    parts.push(`${day.noteCount} 笔记`);
+  }
+  if (day.totalDuration) {
+    parts.push(formatDuration(day.totalDuration));
+  }
+  return parts.join(' · ');
+}
+
 function Field(props: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
@@ -1393,6 +1906,33 @@ function formatShortDateTime(input: string): string {
     hour: '2-digit',
     minute: '2-digit'
   }).format(new Date(input));
+}
+
+function formatRecordingListDate(recording: RecordingListItem): string {
+  return formatShortDateTime(recording.createdAt ?? recording.importedAt);
+}
+
+function libraryItemKey(kind: LibraryItem['kind'], id: string): string {
+  return `${kind}:${id}`;
+}
+
+function noteSignature(title: string, contentJson: RichTextDocument, plainText: string): string {
+  return JSON.stringify({ title, contentJson, plainText });
+}
+
+function toEditorContent(content: RichTextDocument): JSONContent {
+  if (!content || content.type !== 'doc') {
+    return emptyEditorDocument();
+  }
+
+  return content as JSONContent;
+}
+
+function emptyEditorDocument(): JSONContent {
+  return {
+    type: 'doc',
+    content: [{ type: 'paragraph' }]
+  };
 }
 
 function formatFileSize(size: number): string {

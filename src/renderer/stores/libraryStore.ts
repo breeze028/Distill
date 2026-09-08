@@ -1,16 +1,18 @@
 import { create } from 'zustand';
-import type { AIArtifactTemplate, AppSettings, ProcessingJobKind, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from '@shared/types/domain';
+import type { AIArtifactTemplate, AppSettings, LibraryCalendarDay, LibraryItem, NoteDetail, ProcessingJobKind, RecordingDetail, RecordingListItem, RichTextDocument, SpeechToTextStatus, WatchFolderStatus } from '@shared/types/domain';
 
 type ViewMode = 'library' | 'calendar' | 'settings';
 type CalendarMonth = { year: number; month: number };
 
 type LibraryState = {
+  libraryItems: LibraryItem[];
   recordings: RecordingListItem[];
   selectedRecording: RecordingDetail | null;
+  selectedNote: NoteDetail | null;
   calendarMonth: CalendarMonth;
-  calendarDays: RecordingCalendarDay[];
+  calendarDays: LibraryCalendarDay[];
   selectedCalendarDate: string | null;
-  calendarRecordings: RecordingListItem[];
+  calendarItems: LibraryItem[];
   aiTemplates: AIArtifactTemplate[];
   settings: AppSettings | null;
   speechToTextStatus: SpeechToTextStatus | null;
@@ -26,11 +28,17 @@ type LibraryState = {
   error: string | null;
   load(): Promise<void>;
   selectRecording(id: string): Promise<void>;
+  createNote(): Promise<void>;
+  selectNote(id: string): Promise<void>;
+  saveNote(noteId: string, title: string, contentJson: RichTextDocument, plainText: string): Promise<void>;
+  deleteNote(id: string): Promise<void>;
   importFromDialog(): Promise<void>;
   importFromPath(filePath: string): Promise<void>;
   importFromPaths(filePaths: string[]): Promise<void>;
   transcribeRecording(id: string): Promise<void>;
   editTranscriptSegment(recordingId: string, transcriptId: string, segmentId: string, text: string): Promise<void>;
+  revealRecordingInFolder(id: string): Promise<void>;
+  deleteRecording(id: string): Promise<void>;
   generateArtifact(id: string, templateId?: string): Promise<void>;
   deleteAIArtifact(recordingId: string, artifactId: string): Promise<void>;
   search(query: string): Promise<void>;
@@ -45,12 +53,14 @@ type LibraryState = {
 };
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
+  libraryItems: [],
   recordings: [],
   selectedRecording: null,
+  selectedNote: null,
   calendarMonth: currentCalendarMonth(),
   calendarDays: [],
   selectedCalendarDate: null,
-  calendarRecordings: [],
+  calendarItems: [],
   aiTemplates: [],
   settings: null,
   speechToTextStatus: null,
@@ -68,7 +78,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   async load() {
     set({ loading: true, error: null });
     try {
-      const [recordings, aiTemplates, settings, speechToTextStatus, watchFolderStatus] = await Promise.all([
+      const [libraryItems, recordings, aiTemplates, settings, speechToTextStatus, watchFolderStatus] = await Promise.all([
+        window.distillAPI.listLibraryItems(),
         window.distillAPI.listRecordings(),
         window.distillAPI.listAITemplates(),
         window.distillAPI.getSettings(),
@@ -76,13 +87,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         window.distillAPI.getAudioLibraryFolderStatus()
       ]);
       const selected = get().selectedRecording;
+      const selectedNote = get().selectedNote;
       set({
+        libraryItems,
         recordings,
         aiTemplates,
         settings,
         speechToTextStatus,
         watchFolderStatus,
         selectedRecording: selected && recordings.some((item) => item.id === selected.id) ? selected : null,
+        selectedNote: selectedNote && libraryItems.some((item) => item.kind === 'note' && item.id === selectedNote.id) ? selectedNote : null,
         loading: false
       });
     } catch (error) {
@@ -94,9 +108,56 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ loading: true, error: null, viewMode: 'library' });
     try {
       const recording = await window.distillAPI.getRecording(id);
-      set({ selectedRecording: recording, loading: false });
+      set({ selectedRecording: recording, selectedNote: null, loading: false });
     } catch (error) {
       set({ error: toMessage(error), loading: false });
+    }
+  },
+
+  async createNote() {
+    set({ loading: true, error: null, viewMode: 'library' });
+    try {
+      const note = await window.distillAPI.createNote();
+      const libraryItems = await loadVisibleLibraryItems(get().query);
+      set({ libraryItems, selectedNote: note, selectedRecording: null, loading: false });
+    } catch (error) {
+      set({ error: toMessage(error), loading: false });
+    }
+  },
+
+  async selectNote(id) {
+    set({ loading: true, error: null, viewMode: 'library' });
+    try {
+      const note = await window.distillAPI.getNote({ noteId: id });
+      set({ selectedNote: note, selectedRecording: null, loading: false });
+    } catch (error) {
+      set({ error: toMessage(error), loading: false });
+    }
+  },
+
+  async saveNote(noteId, title, contentJson, plainText) {
+    set({ error: null });
+    try {
+      const note = await window.distillAPI.updateNote({ noteId, title, contentJson, plainText });
+      const libraryItems = await loadVisibleLibraryItems(get().query);
+      set({ libraryItems, selectedNote: get().selectedNote?.id === noteId ? note : get().selectedNote });
+    } catch (error) {
+      set({ error: toMessage(error) });
+      throw error;
+    }
+  },
+
+  async deleteNote(id) {
+    set({ error: null });
+    try {
+      await window.distillAPI.deleteNote({ noteId: id });
+      const libraryItems = await loadVisibleLibraryItems(get().query);
+      set({
+        libraryItems,
+        selectedNote: get().selectedNote?.id === id ? null : get().selectedNote
+      });
+    } catch (error) {
+      set({ error: toMessage(error) });
     }
   },
 
@@ -105,8 +166,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     try {
       const result = await window.distillAPI.importRecordingFromDialog();
       if (result) {
-        const recordings = await window.distillAPI.listRecordings();
-        set({ recordings, selectedRecording: result.recording });
+        const [libraryItems, recordings] = await Promise.all([
+          loadVisibleLibraryItems(get().query),
+          window.distillAPI.listRecordings()
+        ]);
+        set({ libraryItems, recordings, selectedRecording: result.recording, selectedNote: null });
         if (hasRunningTranscription(result.recording)) {
           void get().pollRecordingUntilIdle(result.recording.id, 'transcription');
         }
@@ -122,8 +186,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ importing: true, error: null, viewMode: 'library' });
     try {
       const result = await window.distillAPI.importRecordingFromPath(filePath);
-      const recordings = await window.distillAPI.listRecordings();
-      set({ recordings, selectedRecording: result.recording });
+      const [libraryItems, recordings] = await Promise.all([
+        loadVisibleLibraryItems(get().query),
+        window.distillAPI.listRecordings()
+      ]);
+      set({ libraryItems, recordings, selectedRecording: result.recording, selectedNote: null });
       if (hasRunningTranscription(result.recording)) {
         void get().pollRecordingUntilIdle(result.recording.id, 'transcription');
       }
@@ -151,8 +218,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         }
       }
 
-      const recordings = await window.distillAPI.listRecordings();
-      set({ recordings, selectedRecording });
+      const [libraryItems, recordings] = await Promise.all([
+        loadVisibleLibraryItems(get().query),
+        window.distillAPI.listRecordings()
+      ]);
+      set({ libraryItems, recordings, selectedRecording, selectedNote: null });
     } catch (error) {
       set({ error: toMessage(error) });
     } finally {
@@ -168,8 +238,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     }));
     try {
       const recording = await window.distillAPI.startTranscription(id);
-      const recordings = await window.distillAPI.listRecordings();
-      set({ recordings, selectedRecording: recording });
+      const [libraryItems, recordings] = await Promise.all([
+        loadVisibleLibraryItems(get().query),
+        window.distillAPI.listRecordings()
+      ]);
+      set({ libraryItems, recordings, selectedRecording: recording, selectedNote: null });
       void get().pollRecordingUntilIdle(id, 'transcription');
     } catch (error) {
       const recording = await window.distillAPI.getRecording(id).catch(() => null);
@@ -192,11 +265,47 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         segmentId,
         text
       });
-      const recordings = await window.distillAPI.listRecordings();
-      set({ recordings, selectedRecording: recording });
+      const [libraryItems, recordings] = await Promise.all([
+        loadVisibleLibraryItems(get().query),
+        window.distillAPI.listRecordings()
+      ]);
+      set({ libraryItems, recordings, selectedRecording: recording });
     } catch (error) {
       set({ error: toMessage(error) });
       throw error;
+    }
+  },
+
+  async revealRecordingInFolder(id) {
+    set({ error: null });
+    try {
+      await window.distillAPI.showRecordingInFolder({ recordingId: id });
+    } catch (error) {
+      set({ error: toMessage(error) });
+    }
+  },
+
+  async deleteRecording(id) {
+    set({ error: null });
+    try {
+      await window.distillAPI.deleteRecording({ recordingId: id });
+      const [libraryItems, recordings] = await Promise.all([
+        loadVisibleLibraryItems(get().query),
+        loadVisibleRecordings(get().query)
+      ]);
+      const [calendarDays, calendarRecordings] = await Promise.all([
+        window.distillAPI.getLibraryCalendarMonth(get().calendarMonth),
+        loadSelectedCalendarRecordings(get())
+      ]);
+      set({
+        recordings,
+        libraryItems,
+        calendarDays,
+        calendarItems: calendarRecordings,
+        selectedRecording: get().selectedRecording?.id === id ? null : get().selectedRecording
+      });
+    } catch (error) {
+      set({ error: toMessage(error) });
     }
   },
 
@@ -208,9 +317,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     }));
     try {
       const recording = await window.distillAPI.startAIGeneration(id, templateId);
-      const recordings = await window.distillAPI.listRecordings();
+      const [libraryItems, recordings] = await Promise.all([
+        loadVisibleLibraryItems(get().query),
+        window.distillAPI.listRecordings()
+      ]);
       const calendarRecordings = await loadSelectedCalendarRecordings(get());
-      set({ recordings, selectedRecording: recording, calendarRecordings });
+      set({ libraryItems, recordings, selectedRecording: recording, selectedNote: null, calendarItems: calendarRecordings });
       void get().pollRecordingUntilIdle(id, 'ai');
     } catch (error) {
       const recording = await window.distillAPI.getRecording(id).catch(() => null);
@@ -228,9 +340,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ error: null, viewMode: 'library' });
     try {
       const recording = await window.distillAPI.deleteAIArtifact({ recordingId, artifactId });
-      const recordings = await window.distillAPI.listRecordings();
+      const [libraryItems, recordings] = await Promise.all([
+        loadVisibleLibraryItems(get().query),
+        window.distillAPI.listRecordings()
+      ]);
       const calendarRecordings = await loadSelectedCalendarRecordings(get());
-      set({ recordings, selectedRecording: recording, calendarRecordings });
+      set({ libraryItems, recordings, selectedRecording: recording, calendarItems: calendarRecordings });
     } catch (error) {
       set({ error: toMessage(error) });
       throw error;
@@ -240,8 +355,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   async search(query) {
     set({ query, error: null, viewMode: 'library' });
     try {
-      const recordings = await window.distillAPI.searchRecordings(query);
-      set({ recordings });
+      const [libraryItems, recordings] = await Promise.all([
+        window.distillAPI.searchLibraryItems(query),
+        window.distillAPI.searchRecordings(query)
+      ]);
+      set({ libraryItems, recordings });
     } catch (error) {
       set({ error: toMessage(error) });
     }
@@ -257,13 +375,13 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ viewMode: 'calendar', calendarMonth: month, selectedCalendarDate: today, calendarLoading: true, error: null });
     try {
       const [calendarDays, calendarRecordings] = await Promise.all([
-        window.distillAPI.getCalendarMonth(month),
-        window.distillAPI.listRecordingsByDate({ date: today })
+        window.distillAPI.getLibraryCalendarMonth(month),
+        window.distillAPI.listLibraryItemsByDate({ date: today })
       ]);
       set({
         calendarDays,
         selectedCalendarDate: today,
-        calendarRecordings,
+        calendarItems: calendarRecordings,
         calendarLoading: false
       });
     } catch (error) {
@@ -274,16 +392,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   async loadCalendarMonth(year, month) {
     set({ calendarLoading: true, error: null, calendarMonth: { year, month } });
     try {
-      const calendarDays = await window.distillAPI.getCalendarMonth({ year, month });
+      const calendarDays = await window.distillAPI.getLibraryCalendarMonth({ year, month });
       const selectedDate = get().selectedCalendarDate;
       const selectedDateInMonth = selectedDate?.startsWith(`${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`) === true;
       const calendarRecordings = selectedDateInMonth && selectedDate
-        ? await window.distillAPI.listRecordingsByDate({ date: selectedDate })
+        ? await window.distillAPI.listLibraryItemsByDate({ date: selectedDate })
         : [];
       set({
         calendarDays,
         selectedCalendarDate: selectedDateInMonth ? selectedDate : null,
-        calendarRecordings,
+        calendarItems: calendarRecordings,
         calendarLoading: false
       });
     } catch (error) {
@@ -294,8 +412,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   async selectCalendarDate(date) {
     set({ selectedCalendarDate: date, calendarLoading: true, error: null });
     try {
-      const calendarRecordings = await window.distillAPI.listRecordingsByDate({ date });
-      set({ calendarRecordings, calendarLoading: false });
+      const calendarItems = await window.distillAPI.listLibraryItemsByDate({ date });
+      set({ calendarItems, calendarLoading: false });
     } catch (error) {
       set({ error: toMessage(error), calendarLoading: false });
     }
@@ -354,10 +472,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           window.distillAPI.getRecording(id),
           window.distillAPI.listRecordings()
         ]);
+        const libraryItems = await loadVisibleLibraryItems(get().query);
         const calendarRecordings = await loadSelectedCalendarRecordings(get());
         set({
+          libraryItems,
           recordings,
-          calendarRecordings,
+          calendarItems: calendarRecordings,
           selectedRecording: get().selectedRecording?.id === id ? recording : get().selectedRecording
         });
 
@@ -401,11 +521,21 @@ function setRunningState(state: LibraryState, kind: ProcessingJobKind, id: strin
   return {};
 }
 
-async function loadSelectedCalendarRecordings(state: LibraryState): Promise<RecordingListItem[]> {
+async function loadSelectedCalendarRecordings(state: LibraryState): Promise<LibraryItem[]> {
   if (state.viewMode !== 'calendar' || !state.selectedCalendarDate) {
-    return state.calendarRecordings;
+    return state.calendarItems;
   }
-  return window.distillAPI.listRecordingsByDate({ date: state.selectedCalendarDate });
+  return window.distillAPI.listLibraryItemsByDate({ date: state.selectedCalendarDate });
+}
+
+async function loadVisibleRecordings(query: string): Promise<RecordingListItem[]> {
+  const trimmed = query.trim();
+  return trimmed ? window.distillAPI.searchRecordings(trimmed) : window.distillAPI.listRecordings();
+}
+
+async function loadVisibleLibraryItems(query: string): Promise<LibraryItem[]> {
+  const trimmed = query.trim();
+  return trimmed ? window.distillAPI.searchLibraryItems(trimmed) : window.distillAPI.listLibraryItems();
 }
 
 function delay(ms: number): Promise<void> {

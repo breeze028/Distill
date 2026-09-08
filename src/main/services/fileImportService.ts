@@ -6,10 +6,11 @@ import type { ImportRecordingResult, ImportableAudioFormat } from '@shared/types
 import type { RecordingRepository } from '@main/repositories/recordingRepository';
 import { logger } from '@main/logging/logger';
 
-export type AudioMetadataReader = (filePath: string) => Promise<{ duration: number | null; format: string | null }>;
+export type AudioMetadataReader = (filePath: string) => Promise<{ duration: number | null; format: string | null; creationTime?: Date | null }>;
 export type AudioLibraryFolderProvider = () => string;
 
 const supportedFormats = new Set<ImportableAudioFormat>(['m4a', 'mp3', 'wav']);
+const earliestReasonableCreationTimeMs = new Date('1970-01-01T00:00:00.000Z').getTime();
 
 export class FileImportService {
   private readonly inFlightImports = new Map<string, Promise<ImportRecordingResult>>();
@@ -79,6 +80,7 @@ export class FileImportService {
     const metadata = await this.readAudioMetadata(targetPath);
     const targetFileName = path.basename(targetPath);
     const title = path.basename(targetPath, path.extname(targetPath));
+    const createdAt = metadataCreationTimeToIso(metadata.creationTime) ?? fileBirthTimeToIso(sourceStat);
     const recording = this.recordings.createRecording({
       title,
       originalFileName: targetFileName,
@@ -88,7 +90,7 @@ export class FileImportService {
       fileMtimeMs: Math.trunc(sourceStat.mtimeMs),
       format: metadata.format ?? extension,
       duration: metadata.duration,
-      createdAt: Number.isFinite(sourceStat.birthtimeMs) ? sourceStat.birthtime.toISOString() : null
+      createdAt
     });
 
     logger.info('Import', 'Imported recording', { recordingId: recording.id, filePath: targetPath });
@@ -100,17 +102,29 @@ export function normalizeFilePath(filePath: string): string {
   return path.resolve(filePath).toLowerCase();
 }
 
-async function defaultAudioMetadataReader(filePath: string): Promise<{ duration: number | null; format: string | null }> {
+async function defaultAudioMetadataReader(filePath: string): Promise<{ duration: number | null; format: string | null; creationTime: Date | null }> {
   try {
     const metadata = await parseFile(filePath);
     return {
       duration: metadata.format.duration ?? null,
-      format: metadata.format.container ?? path.extname(filePath).slice(1).toLowerCase()
+      format: metadata.format.container ?? path.extname(filePath).slice(1).toLowerCase(),
+      creationTime: metadata.format.creationTime ?? null
     };
   } catch (error) {
     logger.warn('Import', 'Could not read audio metadata; continuing with file stats only', { filePath, error });
-    return { duration: null, format: path.extname(filePath).slice(1).toLowerCase() };
+    return { duration: null, format: path.extname(filePath).slice(1).toLowerCase(), creationTime: null };
   }
+}
+
+function metadataCreationTimeToIso(creationTime: Date | null | undefined): string | null {
+  if (!creationTime || !Number.isFinite(creationTime.getTime()) || creationTime.getTime() < earliestReasonableCreationTimeMs) {
+    return null;
+  }
+  return creationTime.toISOString();
+}
+
+function fileBirthTimeToIso(stat: Stats): string | null {
+  return Number.isFinite(stat.birthtimeMs) ? stat.birthtime.toISOString() : null;
 }
 
 async function resolveLibraryTargetPath(sourcePath: string, libraryFolder: string, sourceStat: Stats): Promise<string> {

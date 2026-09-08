@@ -78,6 +78,48 @@ describe('FileImportService', () => {
     expect(repository.listRecordings()).toHaveLength(1);
   });
 
+  it('uses embedded audio creation time before file system creation time', async () => {
+    const sourceDir = path.join(tmpDir, 'source');
+    const libraryDir = path.join(tmpDir, 'library');
+    fs.mkdirSync(sourceDir);
+    const filePath = path.join(sourceDir, 'voice-date.m4a');
+    fs.writeFileSync(filePath, Buffer.from('dated-audio'));
+    const embeddedCreationTime = new Date('2024-05-06T07:08:09.000Z');
+
+    const repository = new RecordingRepository(dbManager.open());
+    const service = new FileImportService(
+      repository,
+      async () => ({ duration: 9, format: 'M4A', creationTime: embeddedCreationTime }),
+      () => libraryDir
+    );
+
+    const imported = await service.importFile(filePath);
+    const days = repository.getCalendarMonth(2024, 5);
+
+    expect(imported.recording.createdAt).toBe(embeddedCreationTime.toISOString());
+    expect(days).toContainEqual({ date: '2024-05-06', recordingCount: 1, totalDuration: 9 });
+  });
+
+  it('ignores MP4 epoch placeholder creation time', async () => {
+    const sourceDir = path.join(tmpDir, 'source');
+    const libraryDir = path.join(tmpDir, 'library');
+    fs.mkdirSync(sourceDir);
+    const filePath = path.join(sourceDir, 'placeholder-date.m4a');
+    fs.writeFileSync(filePath, Buffer.from('placeholder-date-audio'));
+    const fileSystemCreationTime = fs.statSync(filePath).birthtime.toISOString();
+
+    const repository = new RecordingRepository(dbManager.open());
+    const service = new FileImportService(
+      repository,
+      async () => ({ duration: 9, format: 'M4A', creationTime: new Date('1904-01-01T00:00:00.000Z') }),
+      () => libraryDir
+    );
+
+    const imported = await service.importFile(filePath);
+
+    expect(imported.recording.createdAt).toBe(fileSystemCreationTime);
+  });
+
   it('deduplicates concurrent imports for the copied audio library file', async () => {
     const sourceDir = path.join(tmpDir, 'source');
     const libraryDir = path.join(tmpDir, 'library');
