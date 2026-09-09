@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { SqliteDatabase } from '@main/database/database';
 import type { NoteDetail, NoteListItem, RichTextDocument } from '@shared/types/domain';
+import { matchesSearchQuery, searchScore, toFtsQuery, toLikePatterns } from './searchQuery';
 
 type NoteRow = {
   id: string;
@@ -162,22 +163,32 @@ export class NoteRepository {
       )
       .all(toFtsQuery(trimmed)) as NoteRow[];
 
-    const likeQuery = `%${escapeLike(trimmed)}%`;
-    const fallbackRows = this.db
-      .prepare(
-        `SELECT *
-         FROM note
-         WHERE title LIKE ? ESCAPE '\\'
-            OR plain_text LIKE ? ESCAPE '\\'
-         ORDER BY updated_at DESC, rowid DESC`
-      )
-      .all(likeQuery, likeQuery) as NoteRow[];
+    const likePatterns = toLikePatterns(trimmed);
+    const fallbackRows = likePatterns.length
+      ? this.db
+        .prepare(
+          `SELECT DISTINCT *
+           FROM note
+           WHERE ${likePatterns.map(() => [
+             "title LIKE ? ESCAPE '\\'",
+             "plain_text LIKE ? ESCAPE '\\'"
+           ].join(' OR ')).map((clause) => `(${clause})`).join(' OR ')}
+           ORDER BY updated_at DESC, rowid DESC`
+        )
+        .all(...likePatterns.flatMap((pattern) => [pattern, pattern])) as NoteRow[]
+      : [];
 
     const rowsById = new Map<string, NoteRow>();
     for (const row of [...ftsRows, ...fallbackRows]) {
       rowsById.set(row.id, row);
     }
-    return [...rowsById.values()].map(toListItem);
+    return [...rowsById.values()]
+      .map((row) => ({
+        row,
+        score: searchScore([row.title, row.plain_text].join('\n'), trimmed)
+      }))
+      .sort((left, right) => right.score - left.score || new Date(right.row.updated_at).getTime() - new Date(left.row.updated_at).getTime())
+      .map(({ row }) => toListItem(row));
   }
 
   searchWithinNote(noteId: string, query: string): boolean {
@@ -186,13 +197,8 @@ export class NoteRepository {
       return false;
     }
 
-    const searchableText = [note.title, note.plainText].join('\n').toLocaleLowerCase();
-    return query
-      .trim()
-      .toLocaleLowerCase()
-      .split(/\s+/)
-      .filter(Boolean)
-      .some((part) => searchableText.includes(part));
+    const searchableText = [note.title, note.plainText].join('\n');
+    return matchesSearchQuery(searchableText, query);
   }
 
   private refreshSearchIndex(noteId: string): void {
@@ -242,17 +248,6 @@ function parseContentJson(raw: string): RichTextDocument {
   } catch {
     return emptyDocument;
   }
-}
-
-function toFtsQuery(input: string): string {
-  return input
-    .split(/\s+/)
-    .map((part) => `"${part.replace(/"/g, '""')}"`)
-    .join(' OR ');
-}
-
-function escapeLike(input: string): string {
-  return input.replace(/[\\%_]/g, (part) => `\\${part}`);
 }
 
 function noteDateKey(row: NoteRow): string {

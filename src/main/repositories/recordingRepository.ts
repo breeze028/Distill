@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { SqliteDatabase } from '@main/database/database';
 import type { AIArtifact, AIArtifactContent, ProcessingJob, ProcessingJobKind, ProcessingState, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextProvider, Transcript } from '@shared/types/domain';
 import { aiArtifactContentSchema } from '@shared/schemas/ai';
+import { matchesSearchQuery, searchScore, toFtsQuery, toLikePatterns } from './searchQuery';
 
 type RecordingRow = {
   id: string;
@@ -229,36 +230,46 @@ export class RecordingRepository {
       )
       .all(toFtsQuery(trimmed)) as RecordingRow[];
 
-    const likeQuery = `%${escapeLike(trimmed)}%`;
-    const fallbackRows = this.db
-      .prepare(
-        `SELECT DISTINCT r.*
-         FROM recording r
-         LEFT JOIN transcript tr ON tr.id = (
-           SELECT latest_tr.id
-           FROM transcript latest_tr
-           WHERE latest_tr.recording_id = r.id
-           ORDER BY latest_tr.created_at DESC, latest_tr.rowid DESC
-           LIMIT 1
-         )
-         LEFT JOIN ai_artifact a ON a.recording_id = r.id
-         LEFT JOIN recording_tag rt ON rt.recording_id = r.id
-         LEFT JOIN tag t ON t.id = rt.tag_id
-         WHERE r.title LIKE ? ESCAPE '\\'
-          OR r.original_file_name LIKE ? ESCAPE '\\'
-          OR tr.full_text LIKE ? ESCAPE '\\'
-          OR a.content_json LIKE ? ESCAPE '\\'
-          OR t.name LIKE ? ESCAPE '\\'
-         ORDER BY r.imported_at DESC`
-      )
-      .all(likeQuery, likeQuery, likeQuery, likeQuery, likeQuery) as RecordingRow[];
+    const likePatterns = toLikePatterns(trimmed);
+    const fallbackRows = likePatterns.length
+      ? this.db
+        .prepare(
+          `SELECT DISTINCT r.*
+           FROM recording r
+           LEFT JOIN transcript tr ON tr.id = (
+             SELECT latest_tr.id
+             FROM transcript latest_tr
+             WHERE latest_tr.recording_id = r.id
+             ORDER BY latest_tr.created_at DESC, latest_tr.rowid DESC
+             LIMIT 1
+           )
+           LEFT JOIN ai_artifact a ON a.recording_id = r.id
+           LEFT JOIN recording_tag rt ON rt.recording_id = r.id
+           LEFT JOIN tag t ON t.id = rt.tag_id
+           WHERE ${likePatterns.map(() => [
+             "r.title LIKE ? ESCAPE '\\'",
+             "r.original_file_name LIKE ? ESCAPE '\\'",
+             "tr.full_text LIKE ? ESCAPE '\\'",
+             "a.content_json LIKE ? ESCAPE '\\'",
+             "t.name LIKE ? ESCAPE '\\'"
+           ].join(' OR ')).map((clause) => `(${clause})`).join(' OR ')}
+           ORDER BY r.imported_at DESC`
+        )
+        .all(...likePatterns.flatMap((pattern) => [pattern, pattern, pattern, pattern, pattern])) as RecordingRow[]
+      : [];
 
     const rowsById = new Map<string, RecordingRow>();
     for (const row of [...ftsRows, ...fallbackRows]) {
       rowsById.set(row.id, row);
     }
 
-    return [...rowsById.values()].map((row) => this.toListItem(row));
+    return [...rowsById.values()]
+      .map((row) => ({
+        row,
+        score: searchScore(this.searchableTextForSearch(row), trimmed)
+      }))
+      .sort((left, right) => right.score - left.score || new Date(right.row.imported_at).getTime() - new Date(left.row.imported_at).getTime())
+      .map(({ row }) => this.toListItem(row));
   }
 
   searchWithinRecording(recordingId: string, query: string): boolean {
@@ -275,12 +286,7 @@ export class RecordingRepository {
       recording.tags.join(' ')
     ].join('\n').toLocaleLowerCase();
 
-    return query
-      .trim()
-      .toLocaleLowerCase()
-      .split(/\s+/)
-      .filter(Boolean)
-      .some((part) => searchableText.includes(part));
+    return matchesSearchQuery(searchableText, query);
   }
 
   addTranscript(recordingId: string, transcript: NewTranscript): Transcript {
@@ -660,6 +666,17 @@ export class RecordingRepository {
     };
   }
 
+  private searchableTextForSearch(row: RecordingRow): string {
+    const detail = this.getRecordingWithoutFtsRefresh(row.id);
+    return [
+      detail?.title ?? row.title,
+      detail?.originalFileName ?? row.original_file_name,
+      detail?.transcript?.fullText ?? '',
+      serializeArtifact(detail?.latestArtifact?.content),
+      detail?.tags.join(' ') ?? ''
+    ].join('\n');
+  }
+
   private listProcessingJobs(recordingId: string): ProcessingJob[] {
     const rows = this.db
       .prepare('SELECT * FROM processing_job WHERE recording_id = ? ORDER BY created_at DESC')
@@ -682,17 +699,6 @@ function serializeArtifact(content: AIArtifactContent | undefined): string {
     return '';
   }
   return [content.title, content.summary, ...content.keyPoints, ...content.todos, ...content.tags].join('\n');
-}
-
-function toFtsQuery(input: string): string {
-  return input
-    .split(/\s+/)
-    .map((part) => `"${part.replace(/"/g, '""')}"`)
-    .join(' OR ');
-}
-
-function escapeLike(input: string): string {
-  return input.replace(/[\\%_]/g, (part) => `\\${part}`);
 }
 
 function toProcessingJob(row: ProcessingJobRow): ProcessingJob {

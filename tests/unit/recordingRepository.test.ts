@@ -109,6 +109,30 @@ describe('RecordingRepository', () => {
     expect(repository.search('旧关键词').map((item) => item.id)).not.toContain(recording.id);
   });
 
+  it('matches natural Chinese questions against transcript keywords', () => {
+    const repository = new RecordingRepository(dbManager.open());
+    const recording = repository.createRecording(newRecording('reflection-prompts.m4a'));
+    repository.addTranscript(recording.id, {
+      language: 'zh',
+      duration: 6,
+      fullText: '我想每周做一次复盘，用几个话头把记忆勾出来。',
+      segments: [
+        {
+          id: 'ignored',
+          transcriptId: 'ignored',
+          startTime: 0,
+          endTime: 6,
+          text: '我想每周做一次复盘，用几个话头把记忆勾出来。'
+        }
+      ]
+    });
+
+    const results = repository.search('我以前有没有提过每周复盘的话头？');
+
+    expect(results.map((item) => item.id)).toContain(recording.id);
+    expect(repository.searchWithinRecording(recording.id, '之前说过复盘话头吗')).toBe(true);
+  });
+
   it('uses recording creation dates for calendar month grouping', () => {
     const repository = new RecordingRepository(dbManager.open());
     const morning = repository.createRecording(newRecording('morning.m4a', {

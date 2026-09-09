@@ -215,10 +215,11 @@
 - 已新增 typed Assistant IPC、preload API、`assistantStore` 和独立 `src/renderer/features/assistant/` 组件。
 - UI 已接入可收起右侧 Ask Distill 面板，支持 All Library / Current Item scope，显示回答、activity、structured Sources，并可点击 Source 打开 Recording 或 Note。
 - Recording source navigation 已支持 transcript segment 深跳转：搜索结果能携带匹配片段的 `segmentId/startTime`，点击后打开录音、滚到对应 transcript 行并 seek 音频。
+- 已补强 FTS5 之外的 query-term fallback：Assistant 常见自然中文问题会展开有限片段以提升 Recording/Note 候选召回，简短关键词仍保持精确语义。
 
 下一步：
 
-- 检索质量观察：用真实中文资料库记录 FTS5/fallback 的失败样例，先确认问题形态再做 semantic search。
+- 检索质量观察：用真实中文资料库记录 FTS5 + fallback 的失败样例，先确认问题形态再做 semantic search。
 - Semantic Search：在 SQLite FTS5 不足以覆盖“字面不同但语义相同”的回顾问题时单独设计。
 - Write Tools + Human Confirmation：未来允许创建 Note、Tag、Todo 等写入动作前，必须先设计人工确认。
 - Weekly Reflection：定期回顾近期资料，生成可审阅的周/月回顾。

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { RecordingRepository } from '@main/repositories/recordingRepository';
 import type { NoteRepository } from '@main/repositories/noteRepository';
+import { searchTerms } from '@main/repositories/searchQuery';
 import type { AgentSource, NoteListItem, RecordingDetail, RecordingListItem, TranscriptSegment } from '@shared/types/domain';
 import type { AgentTool, AgentToolContext, AgentToolResult } from './types';
 
@@ -334,24 +335,6 @@ function bestSnippet(texts: string[], query: string): string {
   const index = terms.length ? terms.map((term) => lower.indexOf(term)).find((position) => position >= 0) ?? 0 : 0;
   const start = Math.max(0, index - 80);
   return text.slice(start, start + 260);
-}
-
-function searchTerms(query: string): string[] {
-  const normalized = query
-    .toLocaleLowerCase()
-    .replace(/[^\p{Letter}\p{Number}]+/gu, ' ');
-  const terms = normalized.split(/\s+/).filter((term) => term.length >= 2);
-  const cjkChunks = query.toLocaleLowerCase().match(/\p{Script=Han}{2,}/gu) ?? [];
-  for (const chunk of cjkChunks) {
-    if (chunk.length <= 12) {
-      terms.push(chunk);
-    }
-    for (let index = 0; index < chunk.length - 1; index += 1) {
-      terms.push(chunk.slice(index, index + 2));
-    }
-  }
-
-  return [...new Set(terms)].sort((left, right) => right.length - left.length);
 }
 
 function transcriptPreview(text: string): string {

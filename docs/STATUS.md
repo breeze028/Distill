@@ -102,6 +102,7 @@ Read-only Personal Reflection Agent 当前目标：在不改变核心资料库�
 - 新增 Read-only Personal Reflection Agent：独立 `AgentModel`、`DeepSeekAgentModel`、`MockAgentModel`、`AgentRuntime`、`ToolRegistry`、Library read-only tools、`AgentService` 和 Assistant typed IPC。
 - 新增 `agent_conversation` / `agent_message` 表，Assistant 多轮对话可以持久化；Agent run 不塞进 `ProcessingJob`。
 - Assistant tools 当前支持 `search_library`、`get_recording`、`get_transcript`、`get_note`、`list_library_by_date_range`，全部只读，参数经过 Zod validation，并由程序维护 structured Sources。
+- Repository 搜索新增共享 query-term fallback：简短关键词保持精确搜索，自然中文问题会展开有限片段提升 Recording/Note 召回，供 Assistant 问答复用。
 - Renderer 新增 `src/renderer/features/assistant/` 和 `assistantStore`，`App.tsx` 只负责打开/关闭、scope 和 source navigation 集成。
 - UI 新增可收起右侧 Ask Distill 面板，支持 All Library 和 Current Item scope，回答可渲染常见 Markdown（标题、段落、加粗、列表、分隔线、代码块），并显示 sources 和运行 activity；点击 note source 可打开笔记，点击 recording source 可打开录音，若 source 带 transcript segment 时间则会滚到对应片段并 seek 音频。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
@@ -143,8 +144,8 @@ pnpm dev
 - SQLite migration
 - Calendar 月聚合、本地日期回退和按日录音列表
 - 启动恢复中断的 ProcessingJob
-- Transcript / AIArtifact / FTS 搜索基础 pipeline
-- Note 创建、更新、删除、Calendar 日期聚合和 `note_fts` 搜索索引
+- Transcript / AIArtifact / FTS 搜索基础 pipeline，以及自然中文问题 fallback 召回
+- Note 创建、更新、删除、Calendar 日期聚合、`note_fts` 搜索索引和自然中文问题 fallback 召回
 - Note 图片导入服务、本地托管资源路径校验和图片格式校验
 - packaged app 启动
 - packaged app 导入真实 `.m4a`
@@ -199,7 +200,7 @@ pnpm dev
 - Forge packaging 为了 Phase 0 中诊断 `better-sqlite3` 原生依赖，暂时关闭 `asar`。
 - 当前 UI 文案仍有较多英文，后续可以逐步中文化或引入轻量 i18n。
 - 当前 Playwright smoke 是脚本形式，还不是完整 Playwright test suite。
-- Assistant 第一版仍使用 SQLite FTS5 字面检索，不包含 semantic search、embedding 或 vector database；中文多词拆分召回仍受当前 FTS/fallback 策略限制。
+- Assistant 第一版仍使用 SQLite FTS5 + query-term fallback，不包含 semantic search、embedding 或 vector database；中文语义改写、同义表达和长距离语义关联仍需要后续观察真实资料库后再设计。
 - Assistant source navigation 已支持 recording/note 打开；recording source 若包含 transcript `segmentId/startTime`，会滚动到对应 transcript 行并 seek 音频。
 - Assistant 第一版没有 streaming；运行中只显示简化 activity，不展示 chain-of-thought。
 - 文本编辑器目前是基础富文本能力，不包含完整 Word 级分页、样式管理、表格、图片缩放裁剪和复杂导出。
@@ -210,7 +211,7 @@ pnpm dev
 
 优先任务：
 
-- 观察 SQLite FTS5 在真实中文资料库中的召回，再决定是否设计 semantic search。
+- 用真实中文资料库继续记录 FTS5 + fallback 的失败样例，再决定 semantic search 的必要边界。
 - 为 semantic search 先写设计草案：embedding 存储位置、重建策略、隐私边界、模型可替换接口和回退到 FTS5 的混合检索策略。
 - 设计 Write Tools + Human Confirmation，不在第一版直接实现写入。
 

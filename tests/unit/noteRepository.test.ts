@@ -61,6 +61,20 @@ describe('NoteRepository', () => {
     expect(repository.search('旧关键词').map((item) => item.id)).not.toContain(note.id);
   });
 
+  it('matches natural Chinese questions against note keywords', () => {
+    const repository = new NoteRepository(dbManager.open());
+    const note = repository.createNote({
+      title: '提词器想法',
+      plainText: '这个 App 应该每周随机给三个话头，不要像问卷。',
+      contentJson: paragraphDocument('这个 App 应该每周随机给三个话头，不要像问卷。')
+    });
+
+    const results = repository.search('我之前有没有写过每周话头？');
+
+    expect(results.map((item) => item.id)).toContain(note.id);
+    expect(repository.searchWithinNote(note.id, '写过随机话头吗')).toBe(true);
+  });
+
   it('deletes notes and their search rows', () => {
     const db = dbManager.open();
     const repository = new NoteRepository(db);

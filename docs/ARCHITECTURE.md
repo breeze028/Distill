@@ -67,9 +67,9 @@ Assistant conversation 通过 `agent_conversation` 和 `agent_message` 表持久
 
 ## 搜索
 
-搜索使用 SQLite FTS5。录音索引字段包括标题、转写文本、AI 内容和标签。
+搜索使用 SQLite FTS5。录音索引字段包括标题、转写文本、AI 内容和标签。Repository 搜索会在 FTS5 之外补一层 query-term fallback：简短关键词保持精确 `LIKE` 语义，自然中文问题会展开为有限的中文片段用于候选召回，再用同一套分数排序，降低“有没有提过/之前写过”这类 Assistant 问法漏召回的概率。
 
-文本笔记使用独立的 `note_fts` 索引标题与纯文本正文。Library 搜索在 Main 侧合并录音搜索结果和笔记搜索结果，再按对应资料的最近更新时间排序返回。Calendar 聚合也在 Main 侧合并录音与笔记，返回数量、类型拆分和录音总时长。
+文本笔记使用独立的 `note_fts` 索引标题与纯文本正文，并复用同一套 query-term fallback。Library 搜索在 Main 侧合并录音搜索结果和笔记搜索结果，再按对应资料的最近更新时间排序返回。Calendar 聚合也在 Main 侧合并录音与笔记，返回数量、类型拆分和录音总时长。
 
 Assistant 第一阶段继续复用 SQLite FTS5 和现有 Repository 搜索能力，不引入 embedding、vector database 或 semantic search。工具返回面向 Agent 的受限摘要、片段和 metadata，避免一次 tool call 把超长 transcript 全部塞进模型上下文。
 
