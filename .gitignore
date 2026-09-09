@@ -22,7 +22,7 @@ python/.venv/
 tmp/
 temp/
 *.log
-models/
+/models/
 whisper-models/
 audio-cache/
 .DS_Store

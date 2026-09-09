@@ -27,6 +27,7 @@ async function main() {
   const rendererErrors = [];
   let recordingSourceOpened = false;
   let recordingSourceSeeked = false;
+  let assistantMarkdownRendered = false;
   let noteSourceOpened = false;
   let persistedConversation = false;
   let layout1366Ok = false;
@@ -163,6 +164,11 @@ async function main() {
     await win.keyboard.press('Enter');
     await win.getByText('我找到了', { exact: false }).waitFor({ timeout: 30000 });
     enterSent = true;
+    assistantMarkdownRendered = await win.getByTestId('assistant-markdown').last().evaluate((element) => (
+      Boolean(element.querySelector('h2')) &&
+      Boolean(element.querySelector('strong')) &&
+      element.querySelectorAll('li').length >= 2
+    ));
     await win.getByTestId('assistant-sources').waitFor();
     await win.getByText('摄影计划').first().click();
     await win.getByTestId('assistant-source').filter({ hasText: 'assistant-weekend' }).first().click();
@@ -198,6 +204,7 @@ async function main() {
   console.log(JSON.stringify({
     recordingSourceOpened,
     recordingSourceSeeked,
+    assistantMarkdownRendered,
     noteSourceOpened,
     persistedConversation,
     layout1366Ok,
@@ -233,6 +240,9 @@ async function main() {
   }
   if (!recordingSourceSeeked) {
     throw new Error('Expected clicking a transcript Assistant source to seek audio to its segment time.');
+  }
+  if (!assistantMarkdownRendered) {
+    throw new Error('Expected Assistant answers to render Markdown headings, emphasis, and lists.');
   }
   if (!noteSourceOpened) {
     throw new Error('Expected clicking a note Assistant source to open the note detail.');

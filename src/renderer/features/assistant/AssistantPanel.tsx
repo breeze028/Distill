@@ -1,4 +1,5 @@
-import { FormEvent, KeyboardEvent, PointerEvent, useEffect, useRef, useState } from 'react';
+import { Fragment, FormEvent, KeyboardEvent, PointerEvent, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Bot, ChevronDown, FileAudio, FileText, Loader2, Maximize2, MessageSquarePlus, Minimize2, PanelRightClose, Search, Send, Sparkles } from 'lucide-react';
 import type { AgentConversationMessage, AgentScope, AgentSource, AgentTraceStep } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
@@ -249,8 +250,8 @@ function AssistantMessage(props: {
   const isUser = props.message.role === 'user';
   return (
     <article className={cn('text-sm', isUser && 'ml-8')}>
-      <div className={cn('whitespace-pre-wrap rounded px-3 py-2 leading-6', isUser ? 'bg-muted' : 'bg-transparent px-0')}>
-        {props.message.content}
+      <div className={cn('rounded px-3 py-2 leading-6', isUser ? 'whitespace-pre-wrap bg-muted' : 'bg-transparent px-0')}>
+        {isUser ? props.message.content : <MarkdownContent content={props.message.content} />}
       </div>
       {!isUser && props.message.sources.length > 0 ? (
         <AgentSourceList
@@ -261,6 +262,184 @@ function AssistantMessage(props: {
       ) : null}
     </article>
   );
+}
+
+function MarkdownContent(props: { content: string }) {
+  const blocks = parseMarkdownBlocks(props.content);
+  return (
+    <div data-testid="assistant-markdown" className="space-y-3 text-sm leading-6">
+      {blocks.map((block, index) => renderMarkdownBlock(block, index))}
+    </div>
+  );
+}
+
+type MarkdownBlock =
+  | { type: 'heading'; level: 1 | 2 | 3 | 4; text: string }
+  | { type: 'paragraph'; text: string }
+  | { type: 'unordered-list'; items: string[] }
+  | { type: 'ordered-list'; items: string[] }
+  | { type: 'code'; text: string; language?: string }
+  | { type: 'rule' };
+
+function parseMarkdownBlocks(content: string): MarkdownBlock[] {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const blocks: MarkdownBlock[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index] ?? '';
+    const trimmed = line.trim();
+    if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    const fence = trimmed.match(/^```([\w-]+)?\s*$/);
+    if (fence) {
+      const codeLines: string[] = [];
+      index += 1;
+      while (index < lines.length && !/^```\s*$/.test(lines[index]?.trim() ?? '')) {
+        codeLines.push(lines[index] ?? '');
+        index += 1;
+      }
+      blocks.push({ type: 'code', text: codeLines.join('\n'), language: fence[1] });
+      index += index < lines.length ? 1 : 0;
+      continue;
+    }
+
+    const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      blocks.push({ type: 'heading', level: heading[1].length as 1 | 2 | 3 | 4, text: heading[2].trim() });
+      index += 1;
+      continue;
+    }
+
+    if (/^(---|\*\*\*|___)$/.test(trimmed)) {
+      blocks.push({ type: 'rule' });
+      index += 1;
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (index < lines.length) {
+        const item = (lines[index] ?? '').trim().match(/^[-*]\s+(.+)$/);
+        if (!item) {
+          break;
+        }
+        items.push(item[1].trim());
+        index += 1;
+      }
+      blocks.push({ type: 'unordered-list', items });
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (index < lines.length) {
+        const item = (lines[index] ?? '').trim().match(/^\d+\.\s+(.+)$/);
+        if (!item) {
+          break;
+        }
+        items.push(item[1].trim());
+        index += 1;
+      }
+      blocks.push({ type: 'ordered-list', items });
+      continue;
+    }
+
+    const paragraphLines = [trimmed];
+    index += 1;
+    while (index < lines.length) {
+      const next = (lines[index] ?? '').trim();
+      if (!next || /^```/.test(next) || /^#{1,4}\s+/.test(next) || /^(---|\*\*\*|___)$/.test(next) || /^[-*]\s+/.test(next) || /^\d+\.\s+/.test(next)) {
+        break;
+      }
+      paragraphLines.push(next);
+      index += 1;
+    }
+    blocks.push({ type: 'paragraph', text: paragraphLines.join(' ') });
+  }
+
+  return blocks;
+}
+
+function renderMarkdownBlock(block: MarkdownBlock, index: number): ReactNode {
+  if (block.type === 'heading') {
+    const className = cn(
+      'font-semibold leading-snug text-foreground',
+      block.level === 1 && 'text-lg',
+      block.level === 2 && 'text-base',
+      block.level >= 3 && 'text-sm'
+    );
+    if (block.level === 1) {
+      return <h1 key={index} className={className}>{renderInlineMarkdown(block.text)}</h1>;
+    }
+    if (block.level === 2) {
+      return <h2 key={index} className={className}>{renderInlineMarkdown(block.text)}</h2>;
+    }
+    if (block.level === 3) {
+      return <h3 key={index} className={className}>{renderInlineMarkdown(block.text)}</h3>;
+    }
+    return <h4 key={index} className={className}>{renderInlineMarkdown(block.text)}</h4>;
+  }
+
+  if (block.type === 'unordered-list') {
+    return (
+      <ul key={index} className="list-disc space-y-1 pl-5 marker:text-muted-foreground">
+        {block.items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item)}</li>)}
+      </ul>
+    );
+  }
+
+  if (block.type === 'ordered-list') {
+    return (
+      <ol key={index} className="list-decimal space-y-1 pl-5 marker:text-muted-foreground">
+        {block.items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item)}</li>)}
+      </ol>
+    );
+  }
+
+  if (block.type === 'code') {
+    return (
+      <pre key={index} className="max-w-full overflow-x-auto rounded border border-border bg-muted px-3 py-2 text-xs leading-5">
+        <code>{block.text}</code>
+      </pre>
+    );
+  }
+
+  if (block.type === 'rule') {
+    return <hr key={index} className="border-border" />;
+  }
+
+  return <p key={index}>{renderInlineMarkdown(block.text)}</p>;
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text))) {
+    if (match.index > cursor) {
+      nodes.push(text.slice(cursor, match.index));
+    }
+
+    const token = match[0];
+    if (token.startsWith('**')) {
+      nodes.push(<strong key={nodes.length} className="font-semibold text-foreground">{token.slice(2, -2)}</strong>);
+    } else {
+      nodes.push(<code key={nodes.length} className="rounded bg-muted px-1 py-0.5 text-[0.85em]">{token.slice(1, -1)}</code>);
+    }
+    cursor = match.index + token.length;
+  }
+
+  if (cursor < text.length) {
+    nodes.push(text.slice(cursor));
+  }
+
+  return nodes.map((node, index) => <Fragment key={index}>{node}</Fragment>);
 }
 
 function AgentSourceList(props: {

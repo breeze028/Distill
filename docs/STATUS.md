@@ -103,7 +103,7 @@ Read-only Personal Reflection Agent 当前目标：在不改变核心资料库�
 - 新增 `agent_conversation` / `agent_message` 表，Assistant 多轮对话可以持久化；Agent run 不塞进 `ProcessingJob`。
 - Assistant tools 当前支持 `search_library`、`get_recording`、`get_transcript`、`get_note`、`list_library_by_date_range`，全部只读，参数经过 Zod validation，并由程序维护 structured Sources。
 - Renderer 新增 `src/renderer/features/assistant/` 和 `assistantStore`，`App.tsx` 只负责打开/关闭、scope 和 source navigation 集成。
-- UI 新增可收起右侧 Ask Distill 面板，支持 All Library 和 Current Item scope，显示回答、sources 和运行 activity；点击 note source 可打开笔记，点击 recording source 可打开录音，若 source 带 transcript segment 时间则会滚到对应片段并 seek 音频。
+- UI 新增可收起右侧 Ask Distill 面板，支持 All Library 和 Current Item scope，回答可渲染常见 Markdown（标题、段落、加粗、列表、分隔线、代码块），并显示 sources 和运行 activity；点击 note source 可打开笔记，点击 recording source 可打开录音，若 source 带 transcript segment 时间则会滚到对应片段并 seek 音频。
 - 创建中文 README、AGENTS、产品、架构、开发文档。
 - 初始化 Git，并完成首个提交。
 
@@ -185,7 +185,7 @@ pnpm dev
 - Agent Runtime / ToolRegistry 单测覆盖：unknown tool、Zod validation、tool error、no tool final answer、单次 tool call、多轮 sequential tool call、maxSteps 和 source collection。
 - Agent tools 集成测试使用真实 SQLite + Repository 覆盖录音 transcript 搜索、segment source 时间戳、文本 note 搜索读取，以及 Current Item scope 限制。
 - DeepSeekAgentModel 使用 mock fetch 验证 tool calling 请求体、`tool_calls` 解析、usage 映射和错误分类，不调用真实 DeepSeek。
-- Assistant packaged Electron smoke 覆盖：打开 Ask Distill、mock Agent 回答、显示 Sources、点击 Recording Source 打开录音并 seek 到 transcript segment、点击 Note Source 打开笔记、对话持久化、1366x768/1920x1080 open layout、closed layout、Assistant 全屏/拖拽调整宽度、主 Sidebar/Library 边界拖拽调整宽度、Enter 发送、Shift/Alt+Enter 换行和 renderer error 捕获。
+- Assistant packaged Electron smoke 覆盖：打开 Ask Distill、mock Agent Markdown 回答渲染、显示 Sources、点击 Recording Source 打开录音并 seek 到 transcript segment、点击 Note Source 打开笔记、对话持久化、1366x768/1920x1080 open layout、closed layout、Assistant 全屏/拖拽调整宽度、主 Sidebar/Library 边界拖拽调整宽度、Enter 发送、Shift/Alt+Enter 换行和 renderer error 捕获。
 
 ## 当前已知限制
 
