@@ -42,6 +42,8 @@ Assistant tools 当前保持 5 个只读数据访问工具：`search_library`、
 
 Assistant conversation 通过 `agent_conversation` 和 `agent_message` 表持久化，关闭应用后仍可恢复历史对话。Assistant run 不写入 `ProcessingJob`；trace 只记录可观察的 model/tool step、工具名、参数、耗时、成功/失败和 token usage，不记录 API Key、Authorization header 或模型 private chain-of-thought。回答相关来源由程序维护为结构化 `AgentSource[]`，Renderer 只负责展示紧凑 source rows 并点击打开对应 Recording 或 Note。
 
+Agent system prompt 会注入用户本地日历日期，要求模型把“这周、上个月、最近”等相对时间转换成明确的 `YYYY-MM-DD` 范围后再调用日期工具；同时要求回答优先使用简洁 Markdown，并用自然语言点明相关 Recording/Note 标题和日期，避免脱离 retrieved data 做过度推断。
+
 ## 数据库
 
 初始 schema 包含：
