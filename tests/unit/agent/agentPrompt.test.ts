@@ -17,5 +17,7 @@ describe('Agent system prompt', () => {
     expect(prompt).toContain('Do not emit HTML');
     expect(prompt).toContain('naming the relevant recording or note title and date');
     expect(prompt).toContain('Only answer from the selected recording (recording-1)');
+    expect(prompt).toContain('switch Ask Distill to All Library');
+    expect(prompt).toContain('Do not claim that no other library records exist');
   });
 });

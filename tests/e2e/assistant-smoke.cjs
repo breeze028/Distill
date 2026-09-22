@@ -30,6 +30,7 @@ async function main() {
   let assistantMarkdownRendered = false;
   let noteSourceOpened = false;
   let persistedConversation = false;
+  let historyConversationOpened = false;
   let layout1366Ok = false;
   let layout1920Ok = false;
   let closedLayoutOk = false;
@@ -188,7 +189,14 @@ async function main() {
     await win.getByTestId('assistant-source').filter({ hasText: '摄影计划' }).first().click();
     await win.getByTestId('note-title-input').waitFor();
     noteSourceOpened = await win.getByTestId('note-title-input').inputValue().then((value) => value === '摄影计划');
-    persistedConversation = await win.evaluate(() => window.distillAPI.listAssistantConversations().then((items) => items.length >= 2));
+    const conversations = await win.evaluate(() => window.distillAPI.listAssistantConversations());
+    persistedConversation = conversations.length >= 2;
+    const firstConversation = conversations.find((item) => item.title?.includes('周末')) ?? conversations[conversations.length - 1];
+    if (firstConversation) {
+      await win.getByTitle('Assistant conversations').selectOption(firstConversation.id);
+      await win.locator('article').filter({ hasText: '我以前有没有提过周末很无聊？' }).first().waitFor({ timeout: 5000 });
+      historyConversationOpened = true;
+    }
     await win.getByTitle('Close Assistant').click();
     await win.getByTestId('assistant-panel').waitFor({ state: 'detached' });
     closedLayoutOk = await hasNoHorizontalOverflow(win);
@@ -207,6 +215,7 @@ async function main() {
     assistantMarkdownRendered,
     noteSourceOpened,
     persistedConversation,
+    historyConversationOpened,
     layout1366Ok,
     layout1920Ok,
     closedLayoutOk,
@@ -249,6 +258,9 @@ async function main() {
   }
   if (!persistedConversation) {
     throw new Error('Expected Assistant conversations to persist in SQLite.');
+  }
+  if (!historyConversationOpened) {
+    throw new Error('Expected selecting a previous Assistant conversation to open it.');
   }
   if (rendererErrors.length > 0) {
     throw new Error(`Expected no renderer errors, got: ${rendererErrors.join('\n')}`);

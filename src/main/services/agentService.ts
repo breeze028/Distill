@@ -73,7 +73,7 @@ export class AgentService {
 
 export function buildSystemPrompt(scope: AgentScope, today = new Date()): string {
   const scopeRule = scope.kind === 'current'
-    ? `Current Item scope is active. Only answer from the selected ${scope.item.kind} (${scope.item.id}) unless the user explicitly changes scope.`
+    ? `Current Item scope is active. Only answer from the selected ${scope.item.kind} (${scope.item.id}) unless the user explicitly changes scope. If the user asks about multiple dates, multiple recordings, or anything that requires the broader library, explain that the current scope cannot inspect other items and tell them to switch Ask Distill to All Library. Do not claim that no other library records exist when the current scope prevented checking them.`
     : 'All Library scope is active. You may use read-only tools across the Distill library.';
   const todayKey = formatLocalDate(today);
 

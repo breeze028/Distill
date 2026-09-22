@@ -99,6 +99,66 @@ describe('Agent library tools', () => {
     expect(denied.ok).toBe(false);
     expect(search.content).toContain('"items":[]');
   });
+
+  it('uses local dates for date-range recording results and sources', async () => {
+    const recording = recordings.createRecording(newRecording('late-night.m4a', {
+      createdAt: new Date(2026, 8, 20, 0, 31).toISOString()
+    }));
+
+    const result = await registry.execute('list_library_by_date_range', {
+      startDate: '2026-09-20',
+      endDate: '2026-09-20',
+      kind: 'recording',
+      limit: 10
+    }, { scope: { kind: 'all' } });
+
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(result.content)).toMatchObject({
+      scope: {
+        kind: 'all',
+        restrictedToCurrentItem: false
+      },
+      items: [
+        {
+          id: recording.id,
+          date: '2026-09-20'
+        }
+      ]
+    });
+    expect(result.sources[0]).toMatchObject({
+      kind: 'recording',
+      recordingId: recording.id,
+      date: '2026-09-20'
+    });
+  });
+
+  it('marks date-range results as current-scope limited', async () => {
+    const current = recordings.createRecording(newRecording('current.m4a', {
+      createdAt: new Date(2026, 8, 20, 1, 0).toISOString()
+    }));
+    recordings.createRecording(newRecording('other.m4a', {
+      createdAt: new Date(2026, 8, 20, 2, 0).toISOString()
+    }));
+
+    const result = await registry.execute('list_library_by_date_range', {
+      startDate: '2026-09-20',
+      endDate: '2026-09-20',
+      kind: 'recording',
+      limit: 10
+    }, { scope: { kind: 'current', item: { kind: 'recording', id: current.id } } });
+    const parsed = JSON.parse(result.content);
+
+    expect(result.ok).toBe(true);
+    expect(parsed.scope).toMatchObject({
+      kind: 'current',
+      restrictedToCurrentItem: true,
+      currentItemKind: 'recording',
+      currentItemId: current.id
+    });
+    expect(parsed.scope.message).toContain('not the full Distill library');
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0].id).toBe(current.id);
+  });
 });
 
 function newRecording(fileName: string, overrides: Partial<NewRecording> = {}): NewRecording {

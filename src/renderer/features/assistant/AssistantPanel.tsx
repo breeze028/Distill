@@ -8,7 +8,10 @@ import { useAssistantStore } from '@renderer/stores/assistantStore';
 
 export function AssistantPanel(props: {
   scope: AgentScope;
+  scopeMode: 'all' | 'current';
   scopeLabel: string;
+  currentScopeAvailable: boolean;
+  onScopeModeChange(mode: 'all' | 'current'): void;
   onClose(): void;
   onOpenRecording(source: Extract<AgentSource, { kind: 'recording' }>): void;
   onOpenNote(id: string): void;
@@ -90,6 +93,15 @@ export function AssistantPanel(props: {
     setDraft(textarea.value);
   }
 
+  function changeScopeMode(mode: 'all' | 'current') {
+    if (mode === props.scopeMode || (mode === 'current' && !props.currentScopeAvailable)) {
+      return;
+    }
+
+    props.onScopeModeChange(mode);
+    startNew();
+  }
+
   function startResize(event: PointerEvent<HTMLDivElement>) {
     if (fullScreen || event.button !== 0) {
       return;
@@ -160,6 +172,37 @@ export function AssistantPanel(props: {
           </Button>
         </div>
       </header>
+
+      <div data-testid="assistant-scope-toggle" className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
+        <div className="grid flex-1 grid-cols-2 rounded border border-input bg-background p-0.5 text-xs">
+          <button
+            data-testid="assistant-scope-all"
+            type="button"
+            className={cn(
+              'h-7 rounded px-2 font-medium text-muted-foreground hover:text-foreground',
+              props.scopeMode === 'all' && 'bg-muted text-foreground'
+            )}
+            aria-pressed={props.scopeMode === 'all'}
+            onClick={() => changeScopeMode('all')}
+          >
+            All Library
+          </button>
+          <button
+            data-testid="assistant-scope-current"
+            type="button"
+            className={cn(
+              'h-7 rounded px-2 font-medium text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45',
+              props.scopeMode === 'current' && 'bg-muted text-foreground'
+            )}
+            aria-pressed={props.scopeMode === 'current'}
+            disabled={!props.currentScopeAvailable}
+            title={props.currentScopeAvailable ? 'Use current recording or note only' : 'Select a recording or note to use Current scope'}
+            onClick={() => changeScopeMode('current')}
+          >
+            Current
+          </button>
+        </div>
+      </div>
 
       {conversations.length > 0 ? (
         <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">

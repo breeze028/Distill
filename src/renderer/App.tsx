@@ -75,6 +75,7 @@ function AppShell() {
   const [dragging, setDragging] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [libraryPaneWidth, setLibraryPaneWidth] = useState(420);
+  const [assistantScopeMode, setAssistantScopeMode] = useState<'all' | 'current'>('all');
   const [resizingPane, setResizingPane] = useState<'sidebar' | 'library' | null>(null);
   const [pendingTranscriptSeek, setPendingTranscriptSeek] = useState<PendingTranscriptSeek | null>(null);
   const dragDepth = useRef(0);
@@ -85,8 +86,10 @@ function AppShell() {
     startSidebarWidth: number;
     startLibraryPaneWidth: number;
   } | null>(null);
-  const assistantScope = buildAssistantScope(selectedRecording, selectedNote);
-  const assistantScopeLabel = formatAssistantScopeLabel(selectedRecording, selectedNote);
+  const currentAssistantScope = buildCurrentAssistantScope(selectedRecording, selectedNote);
+  const effectiveAssistantScopeMode = assistantScopeMode === 'current' && currentAssistantScope ? 'current' : 'all';
+  const assistantScope = effectiveAssistantScopeMode === 'current' && currentAssistantScope ? currentAssistantScope : { kind: 'all' as const };
+  const assistantScopeLabel = formatAssistantScopeLabel(assistantScope, selectedRecording, selectedNote);
 
   useEffect(() => {
     void load();
@@ -314,7 +317,10 @@ function AppShell() {
       {assistantOpen ? (
         <AssistantPanel
           scope={assistantScope}
+          scopeMode={effectiveAssistantScopeMode}
           scopeLabel={assistantScopeLabel}
+          currentScopeAvailable={Boolean(currentAssistantScope)}
+          onScopeModeChange={setAssistantScopeMode}
           onClose={() => setAssistantOpen(false)}
           onOpenRecording={openAssistantRecordingSource}
           onOpenNote={(id) => void selectNote(id)}
@@ -2103,7 +2109,7 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function buildAssistantScope(recording: RecordingDetail | null, note: NoteDetail | null): AgentScope {
+function buildCurrentAssistantScope(recording: RecordingDetail | null, note: NoteDetail | null): AgentScope | null {
   if (recording) {
     return {
       kind: 'current',
@@ -2122,17 +2128,20 @@ function buildAssistantScope(recording: RecordingDetail | null, note: NoteDetail
       }
     };
   }
-  return { kind: 'all' };
+  return null;
 }
 
-function formatAssistantScopeLabel(recording: RecordingDetail | null, note: NoteDetail | null): string {
-  if (recording) {
+function formatAssistantScopeLabel(scope: AgentScope, recording: RecordingDetail | null, note: NoteDetail | null): string {
+  if (scope.kind === 'all') {
+    return 'All Library';
+  }
+  if (recording && scope.item.kind === 'recording' && scope.item.id === recording.id) {
     return `Current Recording · ${recording.title}`;
   }
-  if (note) {
+  if (note && scope.item.kind === 'note' && scope.item.id === note.id) {
     return `Current Note · ${note.title}`;
   }
-  return 'All Library';
+  return 'Current Item';
 }
 
 function noteSignature(title: string, contentJson: RichTextDocument, plainText: string): string {

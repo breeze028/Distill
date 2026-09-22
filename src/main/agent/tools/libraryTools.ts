@@ -45,6 +45,7 @@ function searchLibraryTool(recordings: RecordingRepository, notes: NoteRepositor
 
       return {
         data: {
+          scope: scopeSummary(context),
           items: items.map(({ sortAt: _sortAt, ...item }) => item)
         },
         sources: items.map((item) => item.source)
@@ -201,6 +202,7 @@ function listLibraryByDateRangeTool(recordings: RecordingRepository, notes: Note
 
       return {
         data: {
+          scope: scopeSummary(context),
           items: items.map(({ sortAt: _sortAt, ...item }) => item)
         },
         sources: items.map((item) => item.source)
@@ -251,7 +253,7 @@ function applyScopeToDateRange(
     }
 
     const note = notes.getNote(context.scope.item.id);
-    return note && input.kind !== 'recording' && isWithinOptionalDateRange(note.createdAt.slice(0, 10), input.startDate, input.endDate)
+    return note && input.kind !== 'recording' && isWithinOptionalDateRange(noteDate(note), input.startDate, input.endDate)
       ? { recordings: [], notes: [note] }
       : { recordings: [], notes: [] };
   }
@@ -284,7 +286,7 @@ function noteSearchResult(notes: NoteRepository, item: NoteListItem, query: stri
     kind: 'note' as const,
     id: item.id,
     title: item.title,
-    date: item.createdAt.slice(0, 10),
+    date: noteDate(item),
     updatedAt: item.updatedAt,
     snippet,
     sortAt: item.updatedAt,
@@ -357,7 +359,7 @@ function noteSource(note: Pick<NoteListItem, 'id' | 'title' | 'createdAt'>, snip
     kind: 'note',
     noteId: note.id,
     title: note.title,
-    date: note.createdAt.slice(0, 10),
+    date: noteDate(note),
     ...(snippet ? { snippet: snippet.replace(/\s+/g, ' ').trim().slice(0, 400) } : {})
   };
 }
@@ -384,7 +386,40 @@ function assertNoteAllowed(noteId: string, context: AgentToolContext): void {
 }
 
 function recordingDate(recording: Pick<RecordingListItem, 'createdAt' | 'importedAt'>): string {
-  return (recording.createdAt ?? recording.importedAt).slice(0, 10);
+  return localDateKey(recording.createdAt ?? recording.importedAt);
+}
+
+function noteDate(note: Pick<NoteListItem, 'createdAt'>): string {
+  return localDateKey(note.createdAt);
+}
+
+function localDateKey(input: string): string {
+  const date = new Date(input);
+  if (!Number.isFinite(date.getTime())) {
+    return input.slice(0, 10);
+  }
+
+  const year = date.getFullYear().toString().padStart(4, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function scopeSummary(context: AgentToolContext) {
+  if (context.scope.kind === 'all') {
+    return {
+      kind: 'all' as const,
+      restrictedToCurrentItem: false
+    };
+  }
+
+  return {
+    kind: 'current' as const,
+    restrictedToCurrentItem: true,
+    currentItemKind: context.scope.item.kind,
+    currentItemId: context.scope.item.id,
+    message: 'Current Item scope is active. These results only include the selected item, not the full Distill library. If the user asks about multiple dates, multiple recordings, or other library items, tell them to switch Ask Distill to All Library before drawing library-wide conclusions.'
+  };
 }
 
 function isWithinOptionalDateRange(date: string, startDate?: string, endDate?: string): boolean {
