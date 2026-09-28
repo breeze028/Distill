@@ -16,7 +16,7 @@ React Renderer
 
 ## Main Process
 
-Main process 持有可信能力：文件系统、数据库、应用设置、音频协议、未来的 DeepSeek 调用，以及未来的 faster-whisper worker 调用。
+Main process 持有可信能力：文件系统、数据库、应用设置、音频协议、DeepSeek 调用，以及 faster-whisper worker 调用。
 
 ## Renderer
 
@@ -26,11 +26,15 @@ Renderer 是 React UI，使用 Zustand 管理应用状态。Renderer 只能调�
 
 Library 视图使用 `library:list` 和 `library:search` 读取混合资料库项目。录音仍由 `RecordingRepository` 管理；文本笔记由独立 `NoteRepository` 管理，并通过 `note` / `note_fts` 表持久化。Renderer 只保存当前选中的 recording 或 note 状态，不直接写库。文本笔记正文以 Tiptap JSON 作为主数据保存，同时写入 `plain_text` 供列表预览和 FTS 搜索使用。
 
+Library 分组通过 `library_group` 和 `library_group_item` 表持久化。分组可以包含 Recording 和 Note 两类项目，只保存本地关系，不复制、不移动原始音频或笔记。Renderer 通过类型化 IPC 读取分组、组内项目和组内搜索结果，并调用 Main 侧 handler 执行创建分组、删除分组、加入分组和从分组移除。删除录音或笔记时，Main 会先清理对应分组关系，避免留下孤儿引用。
+
 文本笔记图片通过 `notes:import-image-dialog` 选择本地图片。Main 侧 `NoteAssetService` 会把图片复制到应用数据目录下的 note image assets，再返回 `distill-asset://note-image/{fileName}` 给 Renderer 插入到 Tiptap 文档。Renderer 不保存源图片路径，也不把图片二进制写进 SQLite；`distill-asset` 协议只解析受控文件名，避免通过笔记正文读取任意本地文件。
 
 Calendar 视图通过 `library:get-calendar-month` 和 `library:list-by-date` 读取录音与笔记的混合聚合数据。录音日期仍来自 `created_at`，缺失时回退 `imported_at`；笔记日期使用 `created_at`。旧的 `recordings:get-calendar-month` 和 `recordings:list-by-date` 仍作为录音专用接口保留。导入时 `FileImportService` 优先从音频 metadata 的 `creationTime` 写入 recording `created_at`，会忽略 `1904-01-01` 这类明显的容器默认值，读不到有效值时回退文件系统创建时间；日期归类在 Main/repository 侧完成，避免 Renderer 自行解释数据库时间字段。
 
-手动 Retranscribe 使用 `recordings:start-transcription` 立即创建后台 `ProcessingJob` 并返回最新 Recording，Renderer 通过轮询刷新任务状态；同步 `recordings:transcribe` 仍保留给测试和内部调用。
+手动 Retranscribe 使用 `recordings:start-transcription` 立即创建后台 `ProcessingJob` 并返回最新 Recording，Renderer 通过轮询刷新任务状态；同步 `recordings:transcribe` 仍保留给测试和内部调用。`TranscriptionService` 在 Main 内维护单执行槽队列：新任务先以 `pending` 持久化，轮到执行时才进入 `running`，避免批量导入时为每条录音同时加载一份 Whisper 模型并争抢 GPU/内存。单条失败不会阻塞后续任务；应用启动时会把中断的 running transcription 重新放回 pending 队列，并恢复所有未完成转写。
+
+Python worker 继续使用 faster-whisper/CTranslate2，但长音频通过 `BatchedInferencePipeline` 执行。默认 `device=auto` 会优先选择可用 CUDA 设备，`compute_type=auto` 由 CTranslate2 选择当前硬件支持的高效计算类型，默认 batch size 为 4；这些默认值仍可分别通过 `DISTILL_WHISPER_DEVICE`、`DISTILL_WHISPER_COMPUTE_TYPE` 和 `DISTILL_WHISPER_BATCH_SIZE` 覆盖。30 分钟 worker 超时只从任务真正开始执行后计算，不包含排队时间。
 
 Settings 中的音频库文件夹通过 `settings:select-audio-library-folder` 打开 Main 侧原生文件夹选择框。Renderer 只接收用户选择后的本地路径字符串，并在保存设置时通过 `settings:save` 更新存储和监听目录。该目录仍会被 Main 监听，用户直接放入目录的音频会自动出现在 Library。
 
@@ -60,6 +64,8 @@ Agent system prompt 会注入用户本地日历日期，要求模型把“这周
 - `recording_fts`
 - `note`
 - `note_fts`
+- `library_group`
+- `library_group_item`
 - `agent_conversation`
 - `agent_message`
 

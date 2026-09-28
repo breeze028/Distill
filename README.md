@@ -21,7 +21,7 @@ Distill 是一个本地优先的 Windows 桌面语音笔记资料库。它适合
 
 - 目前主要面向本地开发和 Windows 桌面验证，还不是正式发布版安装包。
 - 首次真实转写需要安装 Python 依赖，并可能下载 faster-whisper 模型。
-- `small` / `medium` 模型在普通 CPU 上可能很慢，新手建议先用 `tiny` 或 `base`。
+- `small` / `medium` 模型在普通 CPU 上可能很慢；有受支持的 NVIDIA GPU 时会自动使用 CUDA。新手仍建议先用 `tiny` 或 `base` 验证环境。
 - Ask Distill 当前是只读助手，不会替你改写、删除或创建资料。
 - Ask Distill 使用 SQLite FTS5 和有限的中文查询 fallback，还没有接入向量搜索。
 - 当前 UI 仍有一些英文文案。
@@ -90,7 +90,7 @@ pnpm dev
 
 ### 转写一直很慢
 
-首次使用 faster-whisper 时可能需要下载模型；下载和模型加载都会让第一次等待更久。普通 CPU 上建议先用 `tiny` 或 `base`，确认流程跑通后再尝试更大的模型。
+首次使用 faster-whisper 时可能需要下载模型；下载和模型加载都会让第一次等待更久。批量导入时，Distill 会把音频加入本地队列并逐条使用 GPU，详情页会区分“排队中”和“正在转写”；某一条失败后，后面的任务仍会继续。应用意外关闭后，未完成的转写会在下次启动时自动恢复。普通 CPU 上建议先用 `tiny` 或 `base`，有受支持的 NVIDIA GPU 时可以继续使用 `medium` 获取更好的质量。
 
 ### 转写失败
 

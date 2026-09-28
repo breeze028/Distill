@@ -48,6 +48,21 @@ export type NoteLibraryItem = NoteListItem & {
 
 export type LibraryItem = RecordingLibraryItem | NoteLibraryItem;
 
+export type LibraryGroupItemKind = 'recording' | 'note';
+
+export type LibraryGroupItemRef = {
+  kind: LibraryGroupItemKind;
+  id: string;
+};
+
+export type LibraryGroup = {
+  id: string;
+  title: string;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type RecordingCalendarDay = {
   date: string;
   recordingCount: number;

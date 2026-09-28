@@ -18,12 +18,12 @@ export function AssistantPanel(props: {
 }) {
   const {
     conversations,
+    selectedConversationId,
     activeConversation,
     loading,
     running,
     error,
     lastTrace,
-    load,
     selectConversation,
     startNew,
     ask
@@ -35,10 +35,6 @@ export function AssistantPanel(props: {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const resizePointerId = useRef<number | null>(null);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -161,7 +157,7 @@ export function AssistantPanel(props: {
           <div className="mt-0.5 truncate text-xs text-muted-foreground">{props.scopeLabel}</div>
         </div>
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" title="New assistant conversation" onClick={startNew}>
+          <Button size="icon" variant="ghost" title="New assistant conversation" onClick={startNew} disabled={loading || running}>
             <MessageSquarePlus className="h-4 w-4" />
           </Button>
           <Button size="icon" variant="ghost" title={fullScreen ? 'Exit full screen' : 'Full screen Assistant'} onClick={() => setFullScreen((current) => !current)}>
@@ -183,6 +179,7 @@ export function AssistantPanel(props: {
               props.scopeMode === 'all' && 'bg-muted text-foreground'
             )}
             aria-pressed={props.scopeMode === 'all'}
+            disabled={loading || running}
             onClick={() => changeScopeMode('all')}
           >
             All Library
@@ -195,7 +192,7 @@ export function AssistantPanel(props: {
               props.scopeMode === 'current' && 'bg-muted text-foreground'
             )}
             aria-pressed={props.scopeMode === 'current'}
-            disabled={!props.currentScopeAvailable}
+            disabled={loading || running || !props.currentScopeAvailable}
             title={props.currentScopeAvailable ? 'Use current recording or note only' : 'Select a recording or note to use Current scope'}
             onClick={() => changeScopeMode('current')}
           >
@@ -208,7 +205,7 @@ export function AssistantPanel(props: {
         <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
           <select
             className="h-8 min-w-0 flex-1 rounded border border-input bg-background px-2 text-xs"
-            value={activeConversation?.id ?? ''}
+            value={selectedConversationId ?? ''}
             onChange={(event) => event.target.value ? void selectConversation(event.target.value) : startNew()}
             disabled={loading || running}
             title="Assistant conversations"
@@ -254,9 +251,9 @@ export function AssistantPanel(props: {
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder="Ask about your recordings and notes..."
-            disabled={running}
+            disabled={loading || running}
           />
-          <Button size="icon" type="submit" title="Send" disabled={running || draft.trim().length === 0}>
+          <Button size="icon" type="submit" title="Send" disabled={loading || running || draft.trim().length === 0}>
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>

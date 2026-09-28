@@ -29,8 +29,10 @@ async function main() {
   let recordingSourceSeeked = false;
   let assistantMarkdownRendered = false;
   let noteSourceOpened = false;
+  let noteSwitchingStable = false;
   let persistedConversation = false;
   let historyConversationOpened = false;
+  let historySelectionStable = false;
   let layout1366Ok = false;
   let layout1920Ok = false;
   let closedLayoutOk = false;
@@ -82,6 +84,23 @@ async function main() {
         ]
       }
     }), note.id);
+    await win.evaluate(async () => {
+      const switchingNote = await window.distillAPI.createNote({ title: '切换稳定性检查' });
+      await window.distillAPI.updateNote({
+        noteId: switchingNote.id,
+        title: '切换稳定性检查',
+        plainText: '用于验证笔记编辑器快速切换时不会崩溃。',
+        contentJson: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: '用于验证笔记编辑器快速切换时不会崩溃。' }]
+            }
+          ]
+        }
+      });
+    });
     await win.evaluate(() => window.location.reload());
     await win.waitForLoadState('domcontentloaded');
     await win.waitForTimeout(800);
@@ -189,13 +208,31 @@ async function main() {
     await win.getByTestId('assistant-source').filter({ hasText: '摄影计划' }).first().click();
     await win.getByTestId('note-title-input').waitFor();
     noteSourceOpened = await win.getByTestId('note-title-input').inputValue().then((value) => value === '摄影计划');
+    await win.getByText('切换稳定性检查', { exact: true }).first().click();
+    await win.getByTestId('note-title-input').waitFor();
+    await win.getByTestId('assistant-source').filter({ hasText: '摄影计划' }).first().click();
+    await win.waitForFunction(() => {
+      const title = document.querySelector('[data-testid="note-title-input"]');
+      return title instanceof HTMLInputElement && title.value === '摄影计划';
+    }, undefined, { timeout: 5000 });
+    noteSwitchingStable = await win.getByText('界面出错了', { exact: true }).count() === 0;
     const conversations = await win.evaluate(() => window.distillAPI.listAssistantConversations());
     persistedConversation = conversations.length >= 2;
     const firstConversation = conversations.find((item) => item.title?.includes('周末')) ?? conversations[conversations.length - 1];
+    const secondConversation = conversations.find((item) => item.id !== firstConversation?.id);
     if (firstConversation) {
-      await win.getByTitle('Assistant conversations').selectOption(firstConversation.id);
+      const historySelect = win.getByTitle('Assistant conversations');
+      await historySelect.selectOption(firstConversation.id);
+      historySelectionStable = await historySelect.inputValue().then((value) => value === firstConversation.id);
       await win.locator('article').filter({ hasText: '我以前有没有提过周末很无聊？' }).first().waitFor({ timeout: 5000 });
       historyConversationOpened = true;
+      if (secondConversation) {
+        await historySelect.selectOption(secondConversation.id);
+        await win.locator('article').filter({ hasText: '我之前写过哪些关于摄影的笔记？' }).first().waitFor({ timeout: 5000 });
+        await historySelect.selectOption(firstConversation.id);
+        await win.locator('article').filter({ hasText: '我以前有没有提过周末很无聊？' }).first().waitFor({ timeout: 5000 });
+        historySelectionStable = historySelectionStable && await historySelect.inputValue().then((value) => value === firstConversation.id);
+      }
     }
     await win.getByTitle('Close Assistant').click();
     await win.getByTestId('assistant-panel').waitFor({ state: 'detached' });
@@ -214,8 +251,10 @@ async function main() {
     recordingSourceSeeked,
     assistantMarkdownRendered,
     noteSourceOpened,
+    noteSwitchingStable,
     persistedConversation,
     historyConversationOpened,
+    historySelectionStable,
     layout1366Ok,
     layout1920Ok,
     closedLayoutOk,
@@ -256,11 +295,17 @@ async function main() {
   if (!noteSourceOpened) {
     throw new Error('Expected clicking a note Assistant source to open the note detail.');
   }
+  if (!noteSwitchingStable) {
+    throw new Error('Expected rapidly switching notes while Assistant is open not to crash the renderer.');
+  }
   if (!persistedConversation) {
     throw new Error('Expected Assistant conversations to persist in SQLite.');
   }
   if (!historyConversationOpened) {
     throw new Error('Expected selecting a previous Assistant conversation to open it.');
+  }
+  if (!historySelectionStable) {
+    throw new Error('Expected repeated Assistant history selections to stay on the selected conversation.');
   }
   if (rendererErrors.length > 0) {
     throw new Error(`Expected no renderer errors, got: ${rendererErrors.join('\n')}`);

@@ -60,6 +60,32 @@ export const noteImagePathRequestSchema = z.object({
   filePath: z.string().min(1)
 });
 
+export const libraryGroupIdRequestSchema = z.object({
+  groupId: z.string().min(1)
+});
+
+export const createLibraryGroupRequestSchema = z.object({
+  title: z.string().trim().max(120).optional()
+});
+
+export const renameLibraryGroupRequestSchema = z.object({
+  groupId: z.string().min(1),
+  title: z.string().trim().min(1).max(120)
+});
+
+export const libraryGroupItemRequestSchema = z.object({
+  groupId: z.string().min(1),
+  item: z.object({
+    kind: z.enum(['recording', 'note']),
+    id: z.string().min(1)
+  })
+});
+
+export const libraryGroupSearchRequestSchema = z.object({
+  groupId: z.string().min(1),
+  query: z.string().default('')
+});
+
 export const saveSettingsRequestSchema = z.object({
   aiProvider: z.string().min(1).optional(),
   deepSeekApiKey: z.string().optional(),
@@ -81,3 +107,8 @@ export type CreateNoteRequest = z.infer<typeof createNoteRequestSchema>;
 export type NoteIdRequest = z.infer<typeof noteIdRequestSchema>;
 export type UpdateNoteRequest = z.infer<typeof updateNoteRequestSchema>;
 export type NoteImagePathRequest = z.infer<typeof noteImagePathRequestSchema>;
+export type LibraryGroupIdRequest = z.infer<typeof libraryGroupIdRequestSchema>;
+export type CreateLibraryGroupRequest = z.infer<typeof createLibraryGroupRequestSchema>;
+export type RenameLibraryGroupRequest = z.infer<typeof renameLibraryGroupRequestSchema>;
+export type LibraryGroupItemRequest = z.infer<typeof libraryGroupItemRequestSchema>;
+export type LibraryGroupSearchRequest = z.infer<typeof libraryGroupSearchRequestSchema>;

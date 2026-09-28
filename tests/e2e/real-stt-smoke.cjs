@@ -39,12 +39,12 @@ async function main() {
     const win = await app.firstWindow();
     await win.waitForLoadState('domcontentloaded');
     await win.waitForTimeout(1000);
-    await win.evaluate(() => window.distillAPI.saveSettings({
+    await win.evaluate((watchFolder) => window.distillAPI.saveSettings({
       speechProvider: 'python',
       speechModel: 'faster-whisper-tiny',
       autoTranscribeOnImport: true,
-      watchFolder: audioLibraryDir
-    }));
+      watchFolder
+    }), audioLibraryDir);
     const status = await win.evaluate(() => window.distillAPI.getSpeechToTextStatus());
     if (!status.ready || status.pythonCommand === 'python') {
       throw new Error(`Expected packaged app to auto-detect the source-tree Python venv, got: ${JSON.stringify(status)}`);

@@ -46,7 +46,7 @@ describe('PythonSpeechToTextService', () => {
         process.stdout.write(JSON.stringify({
           language: 'zh',
           duration: 4,
-          segments: [{ start: 0, end: 4, text: request.model + ':' + request.compute_type }]
+          segments: [{ start: 0, end: 4, text: request.model + ':' + request.compute_type + ':batch-' + request.batch_size }]
         }));
       });
     `);
@@ -55,13 +55,14 @@ describe('PythonSpeechToTextService', () => {
       workerPath,
       modelName: 'faster-whisper-small',
       computeType: 'int8',
+      batchSize: 6,
       timeoutMs: 1000
     });
 
     const result = await service.transcribe(path.join(tmpDir, 'audio.m4a'));
 
     expect(result.language).toBe('zh');
-    expect(result.segments[0]?.text).toBe('small:int8');
+    expect(result.segments[0]?.text).toBe('small:int8:batch-6');
   });
 
   it('surfaces structured worker errors', async () => {

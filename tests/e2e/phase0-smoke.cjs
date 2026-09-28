@@ -50,6 +50,13 @@ async function main() {
   let aiArtifactDeleted = false;
   let libraryContextOpenFolderVisible = false;
   let libraryContextDeleteVisible = false;
+  let libraryContextGroupDialogVisible = false;
+  let libraryContextGroupCreated = false;
+  let libraryContextGroupContainsRecording = false;
+  let libraryHeaderGroupDialogVisible = false;
+  let libraryHeaderGroupCreated = false;
+  let libraryGroupRecreateInputAcceptsTyping = false;
+  let libraryGroupRecreateCreated = false;
   let libraryListCreatedDateVisible = false;
   let calendarDayVisible = false;
   let calendarDayDetailVisible = false;
@@ -116,7 +123,36 @@ async function main() {
     await win.getByText('phase1-transcript-long-中文-test').first().click({ button: 'right' });
     libraryContextOpenFolderVisible = await win.getByRole('button', { name: '打开所在文件夹' }).isVisible();
     libraryContextDeleteVisible = await win.getByRole('button', { name: '删除', exact: true }).isVisible();
-    await win.keyboard.press('Escape');
+    await win.getByRole('button', { name: '新建分组' }).click();
+    await win.getByTestId('create-group-dialog').waitFor();
+    libraryContextGroupDialogVisible = true;
+    await win.getByTestId('create-group-title').fill('右键创建分组');
+    await win.getByTestId('create-group-confirm').click();
+    await win.getByTestId('library-group-tab').filter({ hasText: '右键创建分组' }).waitFor();
+    libraryContextGroupCreated = true;
+    libraryContextGroupContainsRecording = await win.getByText('phase1-transcript-long-中文-test').first().isVisible();
+    await win.getByTestId('library-all-group').click();
+    await win.getByRole('button', { name: 'New Group' }).click();
+    await win.getByTestId('create-group-dialog').waitFor();
+    libraryHeaderGroupDialogVisible = true;
+    await win.getByTestId('create-group-title').fill('顶部创建分组');
+    await win.getByTestId('create-group-confirm').click();
+    await win.getByTestId('library-group-tab').filter({ hasText: '顶部创建分组' }).waitFor();
+    libraryHeaderGroupCreated = true;
+    await Promise.all([
+      win.waitForEvent('dialog').then((dialog) => dialog.accept()),
+      win.getByTitle('Delete Group').click()
+    ]);
+    await win.getByTestId('library-group-tab').filter({ hasText: '顶部创建分组' }).waitFor({ state: 'detached' });
+    await win.getByRole('button', { name: 'New Group' }).click();
+    await win.getByTestId('create-group-dialog').waitFor();
+    await win.getByTestId('create-group-title').click();
+    await win.keyboard.type('删除后重建分组');
+    libraryGroupRecreateInputAcceptsTyping = await win.getByTestId('create-group-title').inputValue() === '删除后重建分组';
+    await win.getByTestId('create-group-confirm').click();
+    await win.getByTestId('library-group-tab').filter({ hasText: '删除后重建分组' }).waitFor();
+    libraryGroupRecreateCreated = true;
+    await win.getByTestId('library-all-group').click();
     const calendarDate = await win.evaluate((id) => {
       const pad = (value) => String(value).padStart(2, '0');
       return window.distillAPI.getRecording(id).then((recording) => {
@@ -390,6 +426,13 @@ async function main() {
         aiArtifactDeleted,
         libraryContextOpenFolderVisible,
         libraryContextDeleteVisible,
+        libraryContextGroupDialogVisible,
+        libraryContextGroupCreated,
+        libraryContextGroupContainsRecording,
+        libraryHeaderGroupDialogVisible,
+        libraryHeaderGroupCreated,
+        libraryGroupRecreateInputAcceptsTyping,
+        libraryGroupRecreateCreated,
         libraryListCreatedDateVisible,
         calendarDayVisible,
         calendarDayDetailVisible,
@@ -537,6 +580,27 @@ async function main() {
   }
   if (!libraryContextDeleteVisible) {
     throw new Error('Expected Library recording context menu to show Delete.');
+  }
+  if (!libraryContextGroupDialogVisible) {
+    throw new Error('Expected Library recording context menu New Group to open the group dialog.');
+  }
+  if (!libraryContextGroupCreated) {
+    throw new Error('Expected Library recording context menu New Group to create a group.');
+  }
+  if (!libraryContextGroupContainsRecording) {
+    throw new Error('Expected Library recording context menu New Group to add the recording to the created group.');
+  }
+  if (!libraryHeaderGroupDialogVisible) {
+    throw new Error('Expected Library header New Group to open the group dialog.');
+  }
+  if (!libraryHeaderGroupCreated) {
+    throw new Error('Expected Library header New Group to create a group.');
+  }
+  if (!libraryGroupRecreateInputAcceptsTyping) {
+    throw new Error('Expected Library New Group input to accept keyboard typing after deleting a group.');
+  }
+  if (!libraryGroupRecreateCreated) {
+    throw new Error('Expected Library New Group to create another group after deleting one.');
   }
   if (!libraryListCreatedDateVisible) {
     throw new Error('Expected Library recording list to show the recording creation date.');

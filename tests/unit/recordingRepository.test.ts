@@ -63,6 +63,23 @@ describe('RecordingRepository', () => {
     expect(detail?.transcript?.fullText).toBe('已经有转写文本。');
   });
 
+  it('requeues interrupted transcription jobs for automatic startup resume', () => {
+    const repository = new RecordingRepository(dbManager.open());
+    const recording = repository.createRecording(newRecording('resume-transcription.m4a'));
+    repository.createProcessingJob(recording.id, 'transcription', 'running');
+    repository.updateRecordingProcessingState(recording.id, 'running');
+
+    const requeued = repository.requeueInterruptedTranscriptionJobs();
+    const detail = repository.getRecording(recording.id);
+    const pendingJobs = repository.listPendingTranscriptionJobs();
+
+    expect(requeued).toBe(1);
+    expect(detail?.processingState).toBe('pending');
+    expect(detail?.jobs.find((job) => job.kind === 'transcription')?.state).toBe('pending');
+    expect(detail?.jobs.find((job) => job.kind === 'transcription')?.startedAt).toBeNull();
+    expect(pendingJobs.map((job) => job.recordingId)).toEqual([recording.id]);
+  });
+
   it('edits a transcript segment by creating a latest transcript revision and refreshing search', () => {
     const db = dbManager.open();
     const repository = new RecordingRepository(db);

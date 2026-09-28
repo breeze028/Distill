@@ -34,6 +34,7 @@ type PythonSpeechToTextOptions = {
   modelName?: string | (() => string);
   device?: string;
   computeType?: string;
+  batchSize?: number;
   timeoutMs?: number;
   diagnosisTimeoutMs?: number;
 };
@@ -46,6 +47,7 @@ export class PythonSpeechToTextService implements SpeechToTextService {
   private readonly modelName: string | (() => string);
   private readonly device: string;
   private readonly computeType: string;
+  private readonly batchSize: number;
   private readonly timeoutMs: number;
   private readonly diagnosisTimeoutMs: number;
 
@@ -54,7 +56,8 @@ export class PythonSpeechToTextService implements SpeechToTextService {
     this.workerPath = options.workerPath ?? resolveDefaultWorkerPath();
     this.modelName = options.modelName ?? process.env.DISTILL_WHISPER_MODEL ?? 'tiny';
     this.device = options.device ?? process.env.DISTILL_WHISPER_DEVICE ?? 'auto';
-    this.computeType = options.computeType ?? process.env.DISTILL_WHISPER_COMPUTE_TYPE ?? 'int8';
+    this.computeType = options.computeType ?? process.env.DISTILL_WHISPER_COMPUTE_TYPE ?? 'auto';
+    this.batchSize = options.batchSize ?? readPositiveIntegerEnv('DISTILL_WHISPER_BATCH_SIZE') ?? 4;
     this.timeoutMs = options.timeoutMs ?? readPositiveIntegerEnv('DISTILL_STT_TIMEOUT_MS') ?? 30 * 60 * 1000;
     this.diagnosisTimeoutMs = options.diagnosisTimeoutMs ?? 10 * 1000;
   }
@@ -66,7 +69,8 @@ export class PythonSpeechToTextService implements SpeechToTextService {
         file: filePath,
         model: this.resolvedModelName(),
         device: this.device,
-        compute_type: this.computeType
+        compute_type: this.computeType,
+        batch_size: this.batchSize
       },
       speechToTextResultSchema,
       this.timeoutMs

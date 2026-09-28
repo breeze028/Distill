@@ -96,6 +96,72 @@ describe('TranscriptionService', () => {
     expect(secondJob?.startedAt).not.toBe(firstJob?.startedAt);
     await waitForTranscriptJob(repository, imported.recording.id, secondJob?.id ?? '');
   });
+
+  it('queues batch imports and runs at most one transcription at a time', async () => {
+    const repository = new RecordingRepository(dbManager.open());
+    const importer = new FileImportService(repository, async () => ({ duration: 600, format: 'M4A' }), () => tmpDir);
+    const firstPath = path.join(tmpDir, '批量一.m4a');
+    const secondPath = path.join(tmpDir, '批量二.m4a');
+    fs.writeFileSync(firstPath, Buffer.from('first-audio'));
+    fs.writeFileSync(secondPath, Buffer.from('second-audio'));
+    const first = await importer.importFile(firstPath);
+    const second = await importer.importFile(secondPath);
+    const speechToText = new ControlledStt();
+    const service = new TranscriptionService(repository, speechToText);
+
+    service.startTranscription(first.recording.id);
+    service.startTranscription(second.recording.id);
+    await waitFor(() => speechToText.calls.length === 1);
+
+    expect(repository.getRecording(first.recording.id)?.jobs.find((job) => job.kind === 'transcription')?.state).toBe('running');
+    expect(repository.getRecording(second.recording.id)?.jobs.find((job) => job.kind === 'transcription')?.state).toBe('pending');
+    expect(speechToText.maxConcurrent).toBe(1);
+
+    speechToText.releaseNext();
+    await waitFor(() => speechToText.calls.length === 2);
+    expect(repository.getRecording(first.recording.id)?.transcript?.fullText).toContain('队列转写完成');
+    expect(repository.getRecording(second.recording.id)?.jobs.find((job) => job.kind === 'transcription')?.state).toBe('running');
+    expect(speechToText.maxConcurrent).toBe(1);
+
+    speechToText.releaseNext();
+    await waitForTranscript(repository, second.recording.id);
+    expect(speechToText.maxConcurrent).toBe(1);
+  });
+
+  it('continues the queue after one transcription fails', async () => {
+    const repository = new RecordingRepository(dbManager.open());
+    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }), () => tmpDir);
+    const firstPath = path.join(tmpDir, '失败后继续一.m4a');
+    const secondPath = path.join(tmpDir, '失败后继续二.m4a');
+    fs.writeFileSync(firstPath, Buffer.from('first-audio'));
+    fs.writeFileSync(secondPath, Buffer.from('second-audio'));
+    const first = await importer.importFile(firstPath);
+    const second = await importer.importFile(secondPath);
+    const service = new TranscriptionService(repository, new FailFirstStt());
+
+    service.startTranscription(first.recording.id);
+    service.startTranscription(second.recording.id);
+
+    await waitForTranscript(repository, second.recording.id);
+    expect(repository.getRecording(first.recording.id)?.jobs.find((job) => job.kind === 'transcription')?.state).toBe('failed');
+    expect(repository.getRecording(second.recording.id)?.jobs.find((job) => job.kind === 'transcription')?.state).toBe('succeeded');
+  });
+
+  it('resumes persisted pending transcription jobs', async () => {
+    const repository = new RecordingRepository(dbManager.open());
+    const importer = new FileImportService(repository, async () => ({ duration: 6, format: 'M4A' }), () => tmpDir);
+    const filePath = path.join(tmpDir, '恢复排队.m4a');
+    fs.writeFileSync(filePath, Buffer.from('fake-audio'));
+    const imported = await importer.importFile(filePath);
+    repository.createProcessingJob(imported.recording.id, 'transcription', 'pending');
+    repository.updateRecordingProcessingState(imported.recording.id, 'pending');
+    const service = new TranscriptionService(repository, new SuccessfulStt());
+
+    expect(service.resumePendingTranscriptions()).toBe(1);
+
+    const detail = await waitForTranscript(repository, imported.recording.id);
+    expect(detail.jobs.find((job) => job.kind === 'transcription')?.state).toBe('succeeded');
+  });
 });
 
 class SuccessfulStt implements SpeechToTextService {
@@ -142,6 +208,54 @@ class DelayedStt implements SpeechToTextService {
   }
 }
 
+class ControlledStt implements SpeechToTextService {
+  calls: string[] = [];
+  maxConcurrent = 0;
+  private concurrent = 0;
+  private releases: Array<() => void> = [];
+
+  async transcribe(filePath: string): Promise<SpeechToTextResult> {
+    this.calls.push(filePath);
+    this.concurrent += 1;
+    this.maxConcurrent = Math.max(this.maxConcurrent, this.concurrent);
+    await new Promise<void>((resolve) => this.releases.push(resolve));
+    this.concurrent -= 1;
+    return {
+      language: 'zh',
+      duration: 6,
+      segments: [{ start: 0, end: 6, text: '队列转写完成。' }]
+    };
+  }
+
+  releaseNext(): void {
+    this.releases.shift()?.();
+  }
+
+  async getStatus() {
+    return mockStatus();
+  }
+}
+
+class FailFirstStt implements SpeechToTextService {
+  private calls = 0;
+
+  async transcribe(): Promise<SpeechToTextResult> {
+    this.calls += 1;
+    if (this.calls === 1) {
+      throw new Error('first job failed');
+    }
+    return {
+      language: 'zh',
+      duration: 6,
+      segments: [{ start: 0, end: 6, text: '失败后下一条仍然完成。' }]
+    };
+  }
+
+  async getStatus() {
+    return mockStatus();
+  }
+}
+
 function mockStatus() {
   return {
     provider: 'mock' as const,
@@ -180,4 +294,14 @@ async function waitForTranscriptJob(repository: RecordingRepository, recordingId
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error('Timed out waiting for transcription job.');
+}
+
+async function waitFor(predicate: () => boolean | Promise<boolean>) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (await predicate()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('Timed out waiting for condition.');
 }

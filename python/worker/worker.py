@@ -82,7 +82,8 @@ def diagnose() -> dict[str, Any]:
 
 def transcribe(request: dict[str, Any]) -> dict[str, Any]:
     try:
-        from faster_whisper import WhisperModel
+        import ctranslate2
+        from faster_whisper import BatchedInferencePipeline, WhisperModel
     except ImportError as error:
         raise WorkerError(
             "faster-whisper is not installed",
@@ -90,12 +91,15 @@ def transcribe(request: dict[str, Any]) -> dict[str, Any]:
         ) from error
 
     model_name = normalize_model_name(str(request.get("model") or os.environ.get("DISTILL_WHISPER_MODEL") or "small"))
-    device = str(request.get("device") or os.environ.get("DISTILL_WHISPER_DEVICE") or "auto")
-    compute_type = str(request.get("compute_type") or os.environ.get("DISTILL_WHISPER_COMPUTE_TYPE") or "int8")
+    requested_device = str(request.get("device") or os.environ.get("DISTILL_WHISPER_DEVICE") or "auto")
+    device = resolve_device(requested_device, ctranslate2.get_cuda_device_count())
+    compute_type = str(request.get("compute_type") or os.environ.get("DISTILL_WHISPER_COMPUTE_TYPE") or "auto")
+    batch_size = normalize_batch_size(request.get("batch_size") or os.environ.get("DISTILL_WHISPER_BATCH_SIZE") or 4)
     audio_path = str(request["file"])
 
     model = WhisperModel(model_name, device=device, compute_type=compute_type)
-    segments_iter, info = model.transcribe(audio_path, vad_filter=True)
+    pipeline = BatchedInferencePipeline(model=model)
+    segments_iter, info = pipeline.transcribe(audio_path, batch_size=batch_size, vad_filter=True)
     segments = [
         {
             "start": float(segment.start),
@@ -117,6 +121,20 @@ def normalize_model_name(model_name: str) -> str:
     if model_name.startswith("faster-whisper-"):
         return model_name.removeprefix("faster-whisper-")
     return model_name
+
+
+def resolve_device(requested_device: str, cuda_device_count: int) -> str:
+    if requested_device == "auto":
+        return "cuda" if cuda_device_count > 0 else "cpu"
+    return requested_device
+
+
+def normalize_batch_size(value: Any) -> int:
+    try:
+        batch_size = int(value)
+    except (TypeError, ValueError):
+        batch_size = 4
+    return max(1, min(batch_size, 16))
 
 
 def normalize_duration(duration: Any) -> float | None:

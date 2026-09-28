@@ -1,11 +1,13 @@
 import { create } from 'zustand';
-import type { AIArtifactTemplate, AppSettings, LibraryCalendarDay, LibraryItem, NoteDetail, ProcessingJobKind, RecordingDetail, RecordingListItem, RichTextDocument, SpeechToTextStatus, WatchFolderStatus } from '@shared/types/domain';
+import type { AIArtifactTemplate, AppSettings, LibraryCalendarDay, LibraryGroup, LibraryGroupItemRef, LibraryItem, NoteDetail, ProcessingJobKind, RecordingDetail, RecordingListItem, RichTextDocument, SpeechToTextStatus, WatchFolderStatus } from '@shared/types/domain';
 
 type ViewMode = 'library' | 'calendar' | 'settings';
 type CalendarMonth = { year: number; month: number };
 
 type LibraryState = {
   libraryItems: LibraryItem[];
+  libraryGroups: LibraryGroup[];
+  selectedGroupId: string | null;
   recordings: RecordingListItem[];
   selectedRecording: RecordingDetail | null;
   selectedNote: NoteDetail | null;
@@ -27,6 +29,12 @@ type LibraryState = {
   generatingArtifactIds: Record<string, boolean>;
   error: string | null;
   load(): Promise<void>;
+  selectGroup(id: string | null): Promise<void>;
+  createGroup(title: string, initialItem?: LibraryGroupItemRef): Promise<void>;
+  renameGroup(id: string, title: string): Promise<void>;
+  deleteGroup(id: string): Promise<void>;
+  addItemToGroup(groupId: string, item: LibraryGroupItemRef): Promise<void>;
+  removeItemFromGroup(groupId: string, item: LibraryGroupItemRef): Promise<void>;
   selectRecording(id: string): Promise<void>;
   createNote(): Promise<void>;
   selectNote(id: string): Promise<void>;
@@ -54,6 +62,8 @@ type LibraryState = {
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   libraryItems: [],
+  libraryGroups: [],
+  selectedGroupId: null,
   recordings: [],
   selectedRecording: null,
   selectedNote: null,
@@ -78,8 +88,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   async load() {
     set({ loading: true, error: null });
     try {
-      const [libraryItems, recordings, aiTemplates, settings, speechToTextStatus, watchFolderStatus] = await Promise.all([
-        window.distillAPI.listLibraryItems(),
+      const selectedGroupId = get().selectedGroupId;
+      const [libraryItems, libraryGroups, recordings, aiTemplates, settings, speechToTextStatus, watchFolderStatus] = await Promise.all([
+        loadVisibleLibraryItems(get().query, selectedGroupId),
+        window.distillAPI.listLibraryGroups(),
         window.distillAPI.listRecordings(),
         window.distillAPI.listAITemplates(),
         window.distillAPI.getSettings(),
@@ -90,6 +102,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       const selectedNote = get().selectedNote;
       set({
         libraryItems,
+        libraryGroups,
         recordings,
         aiTemplates,
         settings,
@@ -101,6 +114,87 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       });
     } catch (error) {
       set({ error: toMessage(error), loading: false });
+    }
+  },
+
+  async selectGroup(id) {
+    set({ selectedGroupId: id, loading: true, error: null, viewMode: 'library' });
+    try {
+      const libraryItems = await loadVisibleLibraryItems(get().query, id);
+      set({ libraryItems, loading: false });
+    } catch (error) {
+      set({ error: toMessage(error), loading: false });
+    }
+  },
+
+  async createGroup(title, initialItem) {
+    set({ error: null });
+    try {
+      const group = await window.distillAPI.createLibraryGroup({ title });
+      if (initialItem) {
+        await window.distillAPI.addLibraryItemToGroup({ groupId: group.id, item: initialItem });
+      }
+      const [libraryGroups, libraryItems] = await Promise.all([
+        window.distillAPI.listLibraryGroups(),
+        loadVisibleLibraryItems(get().query, group.id)
+      ]);
+      set({ libraryGroups, selectedGroupId: group.id, libraryItems, viewMode: 'library' });
+    } catch (error) {
+      set({ error: toMessage(error) });
+    }
+  },
+
+  async renameGroup(id, title) {
+    set({ error: null });
+    try {
+      await window.distillAPI.renameLibraryGroup({ groupId: id, title });
+      const libraryGroups = await window.distillAPI.listLibraryGroups();
+      set({ libraryGroups });
+    } catch (error) {
+      set({ error: toMessage(error) });
+    }
+  },
+
+  async deleteGroup(id) {
+    set({ error: null });
+    try {
+      await window.distillAPI.deleteLibraryGroup({ groupId: id });
+      const selectedGroupId = get().selectedGroupId === id ? null : get().selectedGroupId;
+      const [libraryGroups, libraryItems] = await Promise.all([
+        window.distillAPI.listLibraryGroups(),
+        loadVisibleLibraryItems(get().query, selectedGroupId)
+      ]);
+      set({ libraryGroups, selectedGroupId, libraryItems });
+    } catch (error) {
+      set({ error: toMessage(error) });
+    }
+  },
+
+  async addItemToGroup(groupId, item) {
+    set({ error: null });
+    try {
+      await window.distillAPI.addLibraryItemToGroup({ groupId, item });
+      const [libraryGroups, libraryItems] = await Promise.all([
+        window.distillAPI.listLibraryGroups(),
+        loadVisibleLibraryItems(get().query, get().selectedGroupId)
+      ]);
+      set({ libraryGroups, libraryItems });
+    } catch (error) {
+      set({ error: toMessage(error) });
+    }
+  },
+
+  async removeItemFromGroup(groupId, item) {
+    set({ error: null });
+    try {
+      await window.distillAPI.removeLibraryItemFromGroup({ groupId, item });
+      const [libraryGroups, libraryItems] = await Promise.all([
+        window.distillAPI.listLibraryGroups(),
+        loadVisibleLibraryItems(get().query, get().selectedGroupId)
+      ]);
+      set({ libraryGroups, libraryItems });
+    } catch (error) {
+      set({ error: toMessage(error) });
     }
   },
 
@@ -118,8 +212,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ loading: true, error: null, viewMode: 'library' });
     try {
       const note = await window.distillAPI.createNote();
-      const libraryItems = await loadVisibleLibraryItems(get().query);
+      const selectedGroupId = get().selectedGroupId;
+      if (selectedGroupId) {
+        await window.distillAPI.addLibraryItemToGroup({ groupId: selectedGroupId, item: { kind: 'note', id: note.id } });
+      }
+      const [libraryItems, libraryGroups] = await Promise.all([
+        loadVisibleLibraryItems(get().query, selectedGroupId),
+        window.distillAPI.listLibraryGroups()
+      ]);
       set({ libraryItems, selectedNote: note, selectedRecording: null, loading: false });
+      set({ libraryGroups });
     } catch (error) {
       set({ error: toMessage(error), loading: false });
     }
@@ -139,7 +241,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ error: null });
     try {
       const note = await window.distillAPI.updateNote({ noteId, title, contentJson, plainText });
-      const libraryItems = await loadVisibleLibraryItems(get().query);
+      const libraryItems = await loadVisibleLibraryItems(get().query, get().selectedGroupId);
       set({ libraryItems, selectedNote: get().selectedNote?.id === noteId ? note : get().selectedNote });
     } catch (error) {
       set({ error: toMessage(error) });
@@ -151,8 +253,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ error: null });
     try {
       await window.distillAPI.deleteNote({ noteId: id });
-      const libraryItems = await loadVisibleLibraryItems(get().query);
+      const [libraryItems, libraryGroups] = await Promise.all([
+        loadVisibleLibraryItems(get().query, get().selectedGroupId),
+        window.distillAPI.listLibraryGroups()
+      ]);
       set({
+        libraryGroups,
         libraryItems,
         selectedNote: get().selectedNote?.id === id ? null : get().selectedNote
       });
@@ -166,12 +272,17 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     try {
       const result = await window.distillAPI.importRecordingFromDialog();
       if (result) {
-        const [libraryItems, recordings] = await Promise.all([
-          loadVisibleLibraryItems(get().query),
-          window.distillAPI.listRecordings()
+        const selectedGroupId = get().selectedGroupId;
+        if (selectedGroupId) {
+          await window.distillAPI.addLibraryItemToGroup({ groupId: selectedGroupId, item: { kind: 'recording', id: result.recording.id } });
+        }
+        const [libraryItems, recordings, libraryGroups] = await Promise.all([
+          loadVisibleLibraryItems(get().query, selectedGroupId),
+          window.distillAPI.listRecordings(),
+          window.distillAPI.listLibraryGroups()
         ]);
-        set({ libraryItems, recordings, selectedRecording: result.recording, selectedNote: null });
-        if (hasRunningTranscription(result.recording)) {
+        set({ libraryItems, libraryGroups, recordings, selectedRecording: result.recording, selectedNote: null });
+        if (hasActiveTranscription(result.recording)) {
           void get().pollRecordingUntilIdle(result.recording.id, 'transcription');
         }
       }
@@ -186,12 +297,17 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ importing: true, error: null, viewMode: 'library' });
     try {
       const result = await window.distillAPI.importRecordingFromPath(filePath);
-      const [libraryItems, recordings] = await Promise.all([
-        loadVisibleLibraryItems(get().query),
-        window.distillAPI.listRecordings()
+      const selectedGroupId = get().selectedGroupId;
+      if (selectedGroupId) {
+        await window.distillAPI.addLibraryItemToGroup({ groupId: selectedGroupId, item: { kind: 'recording', id: result.recording.id } });
+      }
+      const [libraryItems, recordings, libraryGroups] = await Promise.all([
+        loadVisibleLibraryItems(get().query, selectedGroupId),
+        window.distillAPI.listRecordings(),
+        window.distillAPI.listLibraryGroups()
       ]);
-      set({ libraryItems, recordings, selectedRecording: result.recording, selectedNote: null });
-      if (hasRunningTranscription(result.recording)) {
+      set({ libraryItems, libraryGroups, recordings, selectedRecording: result.recording, selectedNote: null });
+      if (hasActiveTranscription(result.recording)) {
         void get().pollRecordingUntilIdle(result.recording.id, 'transcription');
       }
     } catch (error) {
@@ -210,19 +326,24 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ importing: true, error: null, viewMode: 'library' });
     try {
       let selectedRecording: RecordingDetail | null = null;
+      const selectedGroupId = get().selectedGroupId;
       for (const filePath of uniquePaths) {
         const result = await window.distillAPI.importRecordingFromPath(filePath);
         selectedRecording = result.recording;
-        if (hasRunningTranscription(result.recording)) {
+        if (selectedGroupId) {
+          await window.distillAPI.addLibraryItemToGroup({ groupId: selectedGroupId, item: { kind: 'recording', id: result.recording.id } });
+        }
+        if (hasActiveTranscription(result.recording)) {
           void get().pollRecordingUntilIdle(result.recording.id, 'transcription');
         }
       }
 
-      const [libraryItems, recordings] = await Promise.all([
-        loadVisibleLibraryItems(get().query),
-        window.distillAPI.listRecordings()
+      const [libraryItems, recordings, libraryGroups] = await Promise.all([
+        loadVisibleLibraryItems(get().query, selectedGroupId),
+        window.distillAPI.listRecordings(),
+        window.distillAPI.listLibraryGroups()
       ]);
-      set({ libraryItems, recordings, selectedRecording, selectedNote: null });
+      set({ libraryItems, libraryGroups, recordings, selectedRecording, selectedNote: null });
     } catch (error) {
       set({ error: toMessage(error) });
     } finally {
@@ -239,7 +360,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     try {
       const recording = await window.distillAPI.startTranscription(id);
       const [libraryItems, recordings] = await Promise.all([
-        loadVisibleLibraryItems(get().query),
+        loadVisibleLibraryItems(get().query, get().selectedGroupId),
         window.distillAPI.listRecordings()
       ]);
       set({ libraryItems, recordings, selectedRecording: recording, selectedNote: null });
@@ -266,7 +387,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         text
       });
       const [libraryItems, recordings] = await Promise.all([
-        loadVisibleLibraryItems(get().query),
+        loadVisibleLibraryItems(get().query, get().selectedGroupId),
         window.distillAPI.listRecordings()
       ]);
       set({ libraryItems, recordings, selectedRecording: recording });
@@ -289,9 +410,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ error: null });
     try {
       await window.distillAPI.deleteRecording({ recordingId: id });
-      const [libraryItems, recordings] = await Promise.all([
-        loadVisibleLibraryItems(get().query),
-        loadVisibleRecordings(get().query)
+      const [libraryItems, recordings, libraryGroups] = await Promise.all([
+        loadVisibleLibraryItems(get().query, get().selectedGroupId),
+        loadVisibleRecordings(get().query),
+        window.distillAPI.listLibraryGroups()
       ]);
       const [calendarDays, calendarRecordings] = await Promise.all([
         window.distillAPI.getLibraryCalendarMonth(get().calendarMonth),
@@ -299,6 +421,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       ]);
       set({
         recordings,
+        libraryGroups,
         libraryItems,
         calendarDays,
         calendarItems: calendarRecordings,
@@ -318,7 +441,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     try {
       const recording = await window.distillAPI.startAIGeneration(id, templateId);
       const [libraryItems, recordings] = await Promise.all([
-        loadVisibleLibraryItems(get().query),
+        loadVisibleLibraryItems(get().query, get().selectedGroupId),
         window.distillAPI.listRecordings()
       ]);
       const calendarRecordings = await loadSelectedCalendarRecordings(get());
@@ -341,7 +464,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     try {
       const recording = await window.distillAPI.deleteAIArtifact({ recordingId, artifactId });
       const [libraryItems, recordings] = await Promise.all([
-        loadVisibleLibraryItems(get().query),
+        loadVisibleLibraryItems(get().query, get().selectedGroupId),
         window.distillAPI.listRecordings()
       ]);
       const calendarRecordings = await loadSelectedCalendarRecordings(get());
@@ -356,7 +479,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set({ query, error: null, viewMode: 'library' });
     try {
       const [libraryItems, recordings] = await Promise.all([
-        window.distillAPI.searchLibraryItems(query),
+        loadVisibleLibraryItems(query, get().selectedGroupId),
         window.distillAPI.searchRecordings(query)
       ]);
       set({ libraryItems, recordings });
@@ -466,13 +589,13 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set((state) => setRunningState(state, kind, id, true));
 
     try {
-      for (let attempt = 0; attempt < 120; attempt += 1) {
-        await delay(1000);
+      for (let attempt = 0; attempt < 14_400; attempt += 1) {
+        await delay(2000);
         const [recording, recordings] = await Promise.all([
           window.distillAPI.getRecording(id),
           window.distillAPI.listRecordings()
         ]);
-        const libraryItems = await loadVisibleLibraryItems(get().query);
+        const libraryItems = await loadVisibleLibraryItems(get().query, get().selectedGroupId);
         const calendarRecordings = await loadSelectedCalendarRecordings(get());
         set({
           libraryItems,
@@ -481,7 +604,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           selectedRecording: get().selectedRecording?.id === id ? recording : get().selectedRecording
         });
 
-        if (!recording || !hasRunningJob(recording, kind)) {
+        if (!recording || !hasActiveJob(recording, kind)) {
           break;
         }
       }
@@ -497,12 +620,12 @@ function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong.';
 }
 
-function hasRunningTranscription(recording: RecordingDetail): boolean {
-  return hasRunningJob(recording, 'transcription');
+function hasActiveTranscription(recording: RecordingDetail): boolean {
+  return hasActiveJob(recording, 'transcription');
 }
 
-function hasRunningJob(recording: RecordingDetail, kind: ProcessingJobKind): boolean {
-  return recording.jobs.some((job) => job.kind === kind && job.state === 'running');
+function hasActiveJob(recording: RecordingDetail, kind: ProcessingJobKind): boolean {
+  return recording.jobs.some((job) => job.kind === kind && (job.state === 'pending' || job.state === 'running'));
 }
 
 function setRunningState(state: LibraryState, kind: ProcessingJobKind, id: string, running: boolean): Partial<LibraryState> {
@@ -533,8 +656,13 @@ async function loadVisibleRecordings(query: string): Promise<RecordingListItem[]
   return trimmed ? window.distillAPI.searchRecordings(trimmed) : window.distillAPI.listRecordings();
 }
 
-async function loadVisibleLibraryItems(query: string): Promise<LibraryItem[]> {
+async function loadVisibleLibraryItems(query: string, groupId: string | null): Promise<LibraryItem[]> {
   const trimmed = query.trim();
+  if (groupId) {
+    return trimmed
+      ? window.distillAPI.searchLibraryGroupItems({ groupId, query: trimmed })
+      : window.distillAPI.listLibraryGroupItems({ groupId });
+  }
   return trimmed ? window.distillAPI.searchLibraryItems(trimmed) : window.distillAPI.listLibraryItems();
 }
 

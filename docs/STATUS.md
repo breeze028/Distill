@@ -1,6 +1,6 @@
 # 完成情况
 
-最后更新：2026-09-07
+最后更新：2026-09-27
 
 本文档记录当前已经完成的内容、验证情况、已知限制和推荐下一步。每次完成较大阶段或明显改变架构/核心流程后，都应该更新本文档。
 
@@ -44,6 +44,7 @@ Read-only Personal Reflection Agent 当前目标：在不改变核心资料库�
 - 实现重复导入检测。
 - 实现 Library 列表；当前可混合显示录音和文本笔记。
 - Library 已新增 New Note 入口，支持创建文本笔记。
+- Library 已新增本地分组能力：可创建分组，把录音和文本笔记加入同一组，按组选看项目，并从当前组移除项目；分组只保存关系，不移动或复制原始资料。
 - 文本笔记详情使用 Tiptap 基础富文本编辑器，支持标题、正文、粗体、斜体、下划线、删除线、标题、列表、任务列表、引用、行内代码、代码块、链接、分割线、撤销/重做和自动保存。
 - 文本笔记支持插入本地照片；图片会复制到 Main 侧托管的 note image assets，并通过 `distill-asset://note-image/...` 安全协议渲染。
 - 文本笔记保存 Tiptap JSON 正文与纯文本正文；纯文本用于列表预览和 Library 搜索。
@@ -89,6 +90,10 @@ Read-only Personal Reflection Agent 当前目标：在不改变核心资料库�
 - Recording Detail 在转写运行中会显示已耗时，并提示首次模型下载/加载可能导致等待变长。
 - Python STT 转写超时默认 30 分钟，可用 `DISTILL_STT_TIMEOUT_MS` 调整；超时后 Windows 会尝试结束 worker 进程树，并提示 medium/small 在 CPU 与首次下载场景下可能很慢。
 - 手动 Retranscribe 会先创建新的后台 `ProcessingJob` 并立即刷新 UI，处理耗时从本次任务开始计算。
+- 批量自动转写已改为 Main 侧单执行槽队列：第一条运行时，其余任务以 `pending` 持久化，避免同时加载多份 medium 模型导致显存/内存争抢和整批超时。
+- 转写队列会在单条失败后继续下一条；应用重启时会把中断的 running transcription 放回队列，并自动恢复 pending 任务。
+- Python Worker 已使用 `BatchedInferencePipeline`，默认 batch size 为 4；设备和计算类型默认交给 CTranslate2 自动选择，可用 CUDA 时优先使用 NVIDIA GPU。
+- Recording Detail 会分别显示 `Queued for transcription` 和正在转写的耗时，30 分钟 worker 超时不包含排队时间。
 - 新增 `AIArtifactService`，可基于已有 Transcript 和内置模板生成结构化 AI 笔记。
 - 新增 `recordings:start-ai-generation` IPC，Renderer 可触发后台 AI 生成任务。
 - 新增 `SelectableLLMProvider`，正常默认走 DeepSeek，默认模型为 `deepseek-v4-flash`，测试/开发可显式启用 mock LLM。
@@ -119,6 +124,7 @@ Read-only Personal Reflection Agent 当前目标：在不改变核心资料库�
 - `SpeechToTextService` 已定义，并有 Python Worker 实现骨架与 mock 实现。
 - `AIArtifact` 数据模型已建立，避免把 AI 输出写死为 `Recording.summary`。
 - `Note` 数据模型已建立，避免把用户手写笔记混入 `Recording` 或 `AIArtifact`。
+- `LibraryGroup` 数据模型已建立，用于管理 Recording/Note 的本地分组关系。
 - `ProcessingJob` 表已建立，转写任务和 AI 笔记生成任务都已开始接入。
 
 ## 验证记录
@@ -145,9 +151,11 @@ pnpm dev
 - SQLite migration
 - Calendar 月聚合、本地日期回退和按日录音列表
 - 启动恢复中断的 ProcessingJob
+- 批量转写队列：单并发、pending/running 状态流转、失败后继续下一条、启动恢复未完成任务
 - Transcript / AIArtifact / FTS 搜索基础 pipeline，以及自然中文问题 fallback 召回
 - Note 创建、更新、删除、Calendar 日期聚合、`note_fts` 搜索索引和自然中文问题 fallback 召回
 - Note 图片导入服务、本地托管资源路径校验和图片格式校验
+- LibraryGroup repository 覆盖：创建分组、加入录音/笔记、重复加入去重、移除项目和清理源项目引用
 - packaged app 启动
 - packaged app 导入真实 `.m4a`
 - packaged app 通过拖拽导入音频
@@ -172,6 +180,7 @@ pnpm dev
 - DeepSeek provider 错误分类、raw response 保留和失败诊断详情展示
 - LLM provider 选择默认使用 DeepSeek，默认模型为 `deepseek-v4-flash`，mock LLM 只在显式测试/开发环境启用
 - packaged app 导入中文 `.m4a`，并使用 Python Worker + faster-whisper tiny 生成中文真实 transcript
+- 本机 RTX 3060 Laptop 6GB 实测 `medium + CUDA + compute_type=auto + batch_size=4`：约 688.9 秒合成中文音频在 28.54 秒完成，约 24.1 倍实时速度，未出现 OOM
 - packaged app 在不注入 `DISTILL_PYTHON_COMMAND` 时也能自动发现项目 Python venv
 - transcript 会保存来源 provider、模型和生成它的 ProcessingJob ID
 - 转写运行中 UI 可显示 elapsed time
@@ -193,10 +202,10 @@ pnpm dev
 ## 当前已知限制
 
 - 首次真实 faster-whisper 转写需要用户本机安装 Python 依赖并下载模型。
-- `small`/`medium` 模型在 CPU 上可能明显慢于 `tiny`/`base`；`medium` 首次下载或纯 CPU 转写时可能进入很长等待，短录音默认建议使用 `tiny` 或 `base`。
+- `small`/`medium` 模型在纯 CPU 上仍可能明显慢于 `tiny`/`base`；有受支持的 NVIDIA GPU 时会自动走 CUDA。首次模型下载和每条任务的模型加载仍会产生额外等待。
 - 旧版本已经生成的 mock/占位 transcript 不会被自动删除，需要用户点击 Retranscribe 生成真实内容。
 - DeepSeek provider 已接入生成主干并有 mock fetch 单测；真实 API smoke 仍需要通过本地密钥配置单独验证。
-- 音频库文件夹已有本地监听、自动导入和导入后 Library 刷新第一版；尚未实现系统通知、队列视图和文件稳定性高级策略。
+- 音频库文件夹已有本地监听、自动导入和导入后 Library 刷新第一版；转写详情能显示当前项目处于排队或运行状态，但尚未实现汇总所有任务、顺序和失败项的全局队列视图。
 - `ProcessingJob` 已覆盖 AI 笔记生成的基础状态流转；更细的 token/费用/模板级重试策略尚未设计。
 - Settings 中 API Key 暂存在 SQLite，未来需要替换为 Windows 安全存储方案。
 - Forge packaging 为了 Phase 0 中诊断 `better-sqlite3` 原生依赖，暂时关闭 `asar`。
@@ -206,6 +215,7 @@ pnpm dev
 - Assistant source navigation 已支持 recording/note 打开；recording source 若包含 transcript `segmentId/startTime`，会滚动到对应 transcript 行并 seek 音频。
 - Assistant 第一版没有 streaming；运行中只显示简化 activity，不展示 chain-of-thought。
 - 文本编辑器目前是基础富文本能力，不包含完整 Word 级分页、样式管理、表格、图片缩放裁剪和复杂导出。
+- Library 分组第一版不包含嵌套分组、拖拽排序、批量多选和 AI 自动分组。
 
 ## 下一步建议
 

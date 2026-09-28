@@ -1,5 +1,5 @@
-import type { AgentConversation, AgentConversationDetail, AgentRunResult, AIArtifactTemplate, AppSettings, DeleteRecordingResult, ImportRecordingResult, LibraryCalendarDay, LibraryItem, NoteDetail, NoteImageImportResult, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
-import type { CalendarMonthRequest, CreateNoteRequest, DeleteAIArtifactRequest, EditTranscriptSegmentRequest, NoteIdRequest, NoteImagePathRequest, RecordingDateRequest, RecordingIdRequest, SaveSettingsRequest, UpdateNoteRequest } from './schemas/ipc';
+import type { AgentConversation, AgentConversationDetail, AgentRunResult, AIArtifactTemplate, AppSettings, DeleteRecordingResult, ImportRecordingResult, LibraryCalendarDay, LibraryGroup, LibraryItem, NoteDetail, NoteImageImportResult, RecordingCalendarDay, RecordingDetail, RecordingListItem, SpeechToTextStatus, WatchFolderStatus } from './types/domain';
+import type { CalendarMonthRequest, CreateLibraryGroupRequest, CreateNoteRequest, DeleteAIArtifactRequest, EditTranscriptSegmentRequest, LibraryGroupIdRequest, LibraryGroupItemRequest, LibraryGroupSearchRequest, NoteIdRequest, NoteImagePathRequest, RecordingDateRequest, RecordingIdRequest, RenameLibraryGroupRequest, SaveSettingsRequest, UpdateNoteRequest } from './schemas/ipc';
 import type { AgentConversationIdRequest, AgentRunRequest } from './schemas/agent';
 
 export const ipcChannels = {
@@ -22,6 +22,14 @@ export const ipcChannels = {
   librarySearch: 'library:search',
   libraryGetCalendarMonth: 'library:get-calendar-month',
   libraryListByDate: 'library:list-by-date',
+  libraryGroupsList: 'library-groups:list',
+  libraryGroupsCreate: 'library-groups:create',
+  libraryGroupsRename: 'library-groups:rename',
+  libraryGroupsDelete: 'library-groups:delete',
+  libraryGroupsListItems: 'library-groups:list-items',
+  libraryGroupsSearchItems: 'library-groups:search-items',
+  libraryGroupsAddItem: 'library-groups:add-item',
+  libraryGroupsRemoveItem: 'library-groups:remove-item',
   notesCreate: 'notes:create',
   notesGet: 'notes:get',
   notesUpdate: 'notes:update',
@@ -60,6 +68,14 @@ export type DistillApi = {
   searchLibraryItems(query: string): Promise<LibraryItem[]>;
   getLibraryCalendarMonth(input: CalendarMonthRequest): Promise<LibraryCalendarDay[]>;
   listLibraryItemsByDate(input: RecordingDateRequest): Promise<LibraryItem[]>;
+  listLibraryGroups(): Promise<LibraryGroup[]>;
+  createLibraryGroup(input?: CreateLibraryGroupRequest): Promise<LibraryGroup>;
+  renameLibraryGroup(input: RenameLibraryGroupRequest): Promise<LibraryGroup>;
+  deleteLibraryGroup(input: LibraryGroupIdRequest): Promise<void>;
+  listLibraryGroupItems(input: LibraryGroupIdRequest): Promise<LibraryItem[]>;
+  searchLibraryGroupItems(input: LibraryGroupSearchRequest): Promise<LibraryItem[]>;
+  addLibraryItemToGroup(input: LibraryGroupItemRequest): Promise<void>;
+  removeLibraryItemFromGroup(input: LibraryGroupItemRequest): Promise<void>;
   createNote(input?: CreateNoteRequest): Promise<NoteDetail>;
   getNote(input: NoteIdRequest): Promise<NoteDetail | null>;
   updateNote(input: UpdateNoteRequest): Promise<NoteDetail>;

@@ -79,6 +79,9 @@
 - 已在转写运行中显示耗时提示，减少短音频等待时的不确定感。
 - 已补充 Python Worker 转写超时诊断；超时后会结束 worker 进程树，并提示 small/medium 在 CPU 或首次模型下载时可能非常慢。
 - 已将手动 Retranscribe 改为后台任务启动，UI 立即显示新任务耗时。
+- 已将批量转写改为持久化单执行槽队列：任务先进入 pending，轮到后再进入 running；单条失败不阻塞后续任务，应用重启会自动恢复未完成转写。
+- Python Worker 已启用 faster-whisper batched inference，并把默认设备和计算类型改为自动硬件选择；有可用 NVIDIA CUDA 时会使用 GPU，默认 batch size 为 4。
+- Recording Detail 已区分排队中和正在转写，排队时间不会计入单条 worker 超时。
 - 已强化 transcript segment 点击回听，通过 media fragment 重载播放器源，并等待 metadata、seek 和可播放数据就绪后再播放，避免从头播放。
 - 已为本地音频协议增加 byte range 响应，保证 M4A/MP3/WAV seek 后能从目标时间继续读取音频数据。
 - 已为 Transcript 面板增加独立、可见、稳定的垂直滚动条，并用长 transcript 验证实际 overflow。

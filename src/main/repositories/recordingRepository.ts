@@ -506,6 +506,39 @@ export class RecordingRepository {
     return rows.length;
   }
 
+  requeueInterruptedTranscriptionJobs(): number {
+    const rows = this.db
+      .prepare("SELECT DISTINCT recording_id FROM processing_job WHERE kind = 'transcription' AND state = 'running'")
+      .all() as Array<{ recording_id: string }>;
+    if (rows.length === 0) {
+      return 0;
+    }
+
+    const requeue = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE processing_job
+           SET state = 'pending', started_at = NULL, finished_at = NULL, error_message = NULL, error_detail = NULL
+           WHERE kind = 'transcription' AND state = 'running'`
+        )
+        .run();
+      for (const row of rows) {
+        this.db.prepare("UPDATE recording SET processing_state = 'pending' WHERE id = ?").run(row.recording_id);
+        this.refreshSearchIndex(row.recording_id);
+      }
+    });
+
+    requeue();
+    return rows.length;
+  }
+
+  listPendingTranscriptionJobs(): ProcessingJob[] {
+    const rows = this.db
+      .prepare("SELECT * FROM processing_job WHERE kind = 'transcription' AND state = 'pending' ORDER BY created_at ASC, rowid ASC")
+      .all() as ProcessingJobRow[];
+    return rows.map(toProcessingJob);
+  }
+
   createProcessingJob(recordingId: string, kind: ProcessingJobKind, state: ProcessingState = 'pending'): ProcessingJob {
     const now = new Date().toISOString();
     const startedAt = state === 'pending' ? null : now;

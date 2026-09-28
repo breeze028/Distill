@@ -2,13 +2,14 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { dialog, ipcMain, shell } from 'electron';
 import { ipcChannels } from '@shared/ipc';
-import type { ImportRecordingResult, LibraryCalendarDay, LibraryItem, NoteListItem, RecordingCalendarDay, RecordingListItem } from '@shared/types/domain';
-import { calendarMonthRequestSchema, createNoteRequestSchema, deleteAIArtifactRequestSchema, editTranscriptSegmentRequestSchema, generateAIArtifactRequestSchema, importRecordingRequestSchema, noteIdRequestSchema, noteImagePathRequestSchema, recordingDateRequestSchema, recordingIdRequestSchema, saveSettingsRequestSchema, updateNoteRequestSchema } from '@shared/schemas/ipc';
+import type { ImportRecordingResult, LibraryCalendarDay, LibraryGroupItemRef, LibraryItem, NoteListItem, RecordingCalendarDay, RecordingListItem } from '@shared/types/domain';
+import { calendarMonthRequestSchema, createLibraryGroupRequestSchema, createNoteRequestSchema, deleteAIArtifactRequestSchema, editTranscriptSegmentRequestSchema, generateAIArtifactRequestSchema, importRecordingRequestSchema, libraryGroupIdRequestSchema, libraryGroupItemRequestSchema, libraryGroupSearchRequestSchema, noteIdRequestSchema, noteImagePathRequestSchema, recordingDateRequestSchema, recordingIdRequestSchema, renameLibraryGroupRequestSchema, saveSettingsRequestSchema, updateNoteRequestSchema } from '@shared/schemas/ipc';
 import type { FileImportService } from '@main/services/fileImportService';
 import type { TranscriptionService } from '@main/services/transcriptionService';
 import type { AIArtifactService } from '@main/services/aiArtifactService';
 import type { RecordingRepository } from '@main/repositories/recordingRepository';
 import type { NoteRepository } from '@main/repositories/noteRepository';
+import type { LibraryGroupRepository } from '@main/repositories/libraryGroupRepository';
 import type { SettingsRepository } from '@main/settings/settingsRepository';
 import type { SpeechToTextService } from '@main/stt/types';
 import { listBuiltInTemplateMetadata } from '@main/llm/templates';
@@ -18,6 +19,7 @@ import type { NoteAssetService } from '@main/services/noteAssetService';
 export function registerIpcHandlers(dependencies: {
   recordings: RecordingRepository;
   notes: NoteRepository;
+  libraryGroups: LibraryGroupRepository;
   noteAssets: NoteAssetService;
   importer: FileImportService;
   transcriber: TranscriptionService;
@@ -109,6 +111,7 @@ export function registerIpcHandlers(dependencies: {
       fileMovedToTrash = true;
     }
 
+    dependencies.libraryGroups.deleteItemFromAllGroups({ kind: 'recording', id: parsed.recordingId });
     dependencies.recordings.deleteRecording(parsed.recordingId);
     return { recordingId: parsed.recordingId, fileMovedToTrash };
   });
@@ -153,6 +156,51 @@ export function registerIpcHandlers(dependencies: {
     );
   });
 
+  ipcMain.handle(ipcChannels.libraryGroupsList, () => dependencies.libraryGroups.listGroups());
+
+  ipcMain.handle(ipcChannels.libraryGroupsCreate, (_event, input: unknown) => {
+    const parsed = createLibraryGroupRequestSchema.parse(input ?? {});
+    return dependencies.libraryGroups.createGroup(parsed.title ?? 'New Group');
+  });
+
+  ipcMain.handle(ipcChannels.libraryGroupsRename, (_event, input: unknown) => {
+    const parsed = renameLibraryGroupRequestSchema.parse(input);
+    return dependencies.libraryGroups.renameGroup(parsed.groupId, parsed.title);
+  });
+
+  ipcMain.handle(ipcChannels.libraryGroupsDelete, (_event, input: unknown) => {
+    const parsed = libraryGroupIdRequestSchema.parse(input);
+    dependencies.libraryGroups.deleteGroup(parsed.groupId);
+  });
+
+  ipcMain.handle(ipcChannels.libraryGroupsListItems, (_event, input: unknown) => {
+    const parsed = libraryGroupIdRequestSchema.parse(input);
+    return listLibraryItemsForGroup(
+      dependencies.recordings.listRecordings(),
+      dependencies.notes.listNotes(),
+      dependencies.libraryGroups.listItemRefs(parsed.groupId)
+    );
+  });
+
+  ipcMain.handle(ipcChannels.libraryGroupsSearchItems, (_event, input: unknown) => {
+    const parsed = libraryGroupSearchRequestSchema.parse(input);
+    const trimmed = parsed.query.trim();
+    const recordings = trimmed ? dependencies.recordings.search(trimmed) : dependencies.recordings.listRecordings();
+    const notes = trimmed ? dependencies.notes.search(trimmed) : dependencies.notes.listNotes();
+    return listLibraryItemsForGroup(recordings, notes, dependencies.libraryGroups.listItemRefs(parsed.groupId));
+  });
+
+  ipcMain.handle(ipcChannels.libraryGroupsAddItem, (_event, input: unknown) => {
+    const parsed = libraryGroupItemRequestSchema.parse(input);
+    assertLibraryItemExists(parsed.item, dependencies.recordings, dependencies.notes);
+    dependencies.libraryGroups.addItem(parsed.groupId, parsed.item);
+  });
+
+  ipcMain.handle(ipcChannels.libraryGroupsRemoveItem, (_event, input: unknown) => {
+    const parsed = libraryGroupItemRequestSchema.parse(input);
+    dependencies.libraryGroups.removeItem(parsed.groupId, parsed.item);
+  });
+
   ipcMain.handle(ipcChannels.notesCreate, (_event, input: unknown) => {
     const parsed = createNoteRequestSchema.parse(input ?? {});
     return dependencies.notes.createNote(parsed);
@@ -174,6 +222,7 @@ export function registerIpcHandlers(dependencies: {
 
   ipcMain.handle(ipcChannels.notesDelete, (_event, input: unknown) => {
     const parsed = noteIdRequestSchema.parse(input);
+    dependencies.libraryGroups.deleteItemFromAllGroups({ kind: 'note', id: parsed.noteId });
     dependencies.notes.deleteNote(parsed.noteId);
   });
 
@@ -260,6 +309,24 @@ function listLibraryItems(recordings: RecordingListItem[], notes: NoteListItem[]
       preview: note.plainTextPreview
     }))
   ].sort((left, right) => new Date(right.sortAt).getTime() - new Date(left.sortAt).getTime());
+}
+
+function listLibraryItemsForGroup(recordings: RecordingListItem[], notes: NoteListItem[], refs: LibraryGroupItemRef[]): LibraryItem[] {
+  const recordingIds = new Set(refs.filter((ref) => ref.kind === 'recording').map((ref) => ref.id));
+  const noteIds = new Set(refs.filter((ref) => ref.kind === 'note').map((ref) => ref.id));
+  return listLibraryItems(
+    recordings.filter((recording) => recordingIds.has(recording.id)),
+    notes.filter((note) => noteIds.has(note.id))
+  );
+}
+
+function assertLibraryItemExists(item: LibraryGroupItemRef, recordings: RecordingRepository, notes: NoteRepository): void {
+  if (item.kind === 'recording' && !recordings.getRecording(item.id)) {
+    throw new Error('Recording was not found.');
+  }
+  if (item.kind === 'note' && !notes.getNote(item.id)) {
+    throw new Error('Note was not found.');
+  }
 }
 
 function mergeCalendarDays(recordingDays: RecordingCalendarDay[], noteDays: Array<{ date: string; noteCount: number }>): LibraryCalendarDay[] {

@@ -6,6 +6,7 @@ import started from 'electron-squirrel-startup';
 import { DatabaseManager } from '@main/database/database';
 import { RecordingRepository } from '@main/repositories/recordingRepository';
 import { NoteRepository } from '@main/repositories/noteRepository';
+import { LibraryGroupRepository } from '@main/repositories/libraryGroupRepository';
 import { AgentConversationRepository } from '@main/repositories/agentConversationRepository';
 import { FileImportService } from '@main/services/fileImportService';
 import { TranscriptionService } from '@main/services/transcriptionService';
@@ -98,6 +99,7 @@ app.whenReady().then(() => {
   const db = databaseManager.open();
   recordings = new RecordingRepository(db);
   const notes = new NoteRepository(db);
+  const libraryGroups = new LibraryGroupRepository(db);
   const agentConversations = new AgentConversationRepository(db);
   noteAssets = new NoteAssetService(process.env.DISTILL_ASSET_DIR ?? path.join(app.getPath('userData'), 'assets'));
   const settings = new SettingsRepository(db);
@@ -123,12 +125,20 @@ app.whenReady().then(() => {
     onImported: notifyLibraryChanged
   });
 
+  const requeuedTranscriptionCount = recordings.requeueInterruptedTranscriptionJobs();
   const recoveredJobCount = recordings.recoverInterruptedJobs();
   if (recoveredJobCount > 0) {
     logger.warn('ProcessingJob', 'Recovered interrupted jobs on startup', { recoveredJobCount });
   }
+  const resumedTranscriptionCount = transcriber.resumePendingTranscriptions();
+  if (resumedTranscriptionCount > 0) {
+    logger.info('STT', 'Resumed queued transcription jobs on startup', {
+      resumedTranscriptionCount,
+      requeuedTranscriptionCount
+    });
+  }
   recordings.ensureBuiltInTemplates([...builtInTemplates]);
-  registerIpcHandlers({ recordings, notes, noteAssets, importer, transcriber, aiArtifacts, settings, speechToText, watchFolder: watchFolderService });
+  registerIpcHandlers({ recordings, notes, libraryGroups, noteAssets, importer, transcriber, aiArtifacts, settings, speechToText, watchFolder: watchFolderService });
   registerAssistantIpcHandlers({ agent });
   void watchFolderService.refresh();
   registerAudioProtocol();

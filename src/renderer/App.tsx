@@ -7,8 +7,8 @@ import Link from '@tiptap/extension-link';
 import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import Underline from '@tiptap/extension-underline';
-import { AlertCircle, Bold, Bot, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Code2, Clock3, FileAudio, FileText, FolderOpen, Heading1, Heading2, Image as ImageIcon, Import, Italic, Library, Link2, List, ListChecks, ListOrdered, Minus, Pencil, Plus, Quote, Redo2, RefreshCw, Save, Search, Settings, Strikethrough, Trash2, Underline as UnderlineIcon, Undo2, Upload, X, XCircle } from 'lucide-react';
-import type { AgentScope, AgentSource, AIArtifact, AIArtifactTemplate, LibraryCalendarDay, LibraryItem, NoteDetail, ProcessingJob, RecordingDetail, RecordingListItem, RichTextDocument, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
+import { AlertCircle, Bold, Bot, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Code2, Clock3, FileAudio, FileText, FolderOpen, FolderPlus, Heading1, Heading2, Image as ImageIcon, Import, Italic, Library, Link2, List, ListChecks, ListOrdered, Minus, Pencil, Plus, Quote, Redo2, RefreshCw, Save, Search, Settings, Strikethrough, Trash2, Underline as UnderlineIcon, Undo2, Upload, X, XCircle } from 'lucide-react';
+import type { AgentScope, AgentSource, AIArtifact, AIArtifactTemplate, LibraryCalendarDay, LibraryGroup, LibraryItem, NoteDetail, ProcessingJob, RecordingDetail, RecordingListItem, RichTextDocument, SpeechToTextStatus, TranscriptSegment, WatchFolderStatus } from '@shared/types/domain';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { cn } from '@renderer/lib/utils';
@@ -27,6 +27,8 @@ export function App() {
 function AppShell() {
   const {
     libraryItems,
+    libraryGroups,
+    selectedGroupId,
     recordings,
     selectedRecording,
     selectedNote,
@@ -48,6 +50,11 @@ function AppShell() {
     generatingArtifactIds,
     error,
     load,
+    selectGroup,
+    createGroup,
+    deleteGroup,
+    addItemToGroup,
+    removeItemFromGroup,
     selectRecording,
     createNote,
     selectNote,
@@ -233,9 +240,16 @@ function AppShell() {
       />
       <LibraryPane
         items={libraryItems}
+        groups={libraryGroups}
+        selectedGroupId={selectedGroupId}
         selectedKey={selectedNote ? libraryItemKey('note', selectedNote.id) : selectedRecording ? libraryItemKey('recording', selectedRecording.id) : null}
         loading={loading}
         importing={importing}
+        onSelectGroup={(id) => void selectGroup(id)}
+        onCreateGroup={(title, item) => void createGroup(title, item ? { kind: item.kind, id: item.id } : undefined)}
+        onDeleteGroup={(id) => void deleteGroup(id)}
+        onAddToGroup={(groupId, item) => void addItemToGroup(groupId, { kind: item.kind, id: item.id })}
+        onRemoveFromGroup={(groupId, item) => void removeItemFromGroup(groupId, { kind: item.kind, id: item.id })}
         onSelect={(item) => {
           if (item.kind === 'recording') {
             void selectRecording(item.id);
@@ -293,6 +307,7 @@ function AppShell() {
           />
         ) : selectedNote ? (
           <NoteDetailPane
+            key={selectedNote.id}
             note={selectedNote}
             onSave={saveNote}
           />
@@ -455,9 +470,16 @@ function SidebarItem(props: { icon: React.ReactNode; label: string; active?: boo
 
 function LibraryPane(props: {
   items: LibraryItem[];
+  groups: LibraryGroup[];
+  selectedGroupId: string | null;
   selectedKey: string | null;
   loading: boolean;
   importing: boolean;
+  onSelectGroup(id: string | null): void;
+  onCreateGroup(title: string, item?: LibraryItem): void;
+  onDeleteGroup(id: string): void;
+  onAddToGroup(groupId: string, item: LibraryItem): void;
+  onRemoveFromGroup(groupId: string, item: LibraryItem): void;
   onSelect(item: LibraryItem): void;
   onRevealInFolder(id: string): void;
   onDeleteRecording(id: string): void;
@@ -466,7 +488,21 @@ function LibraryPane(props: {
   onCreateNote(): void;
 }) {
   const [contextMenu, setContextMenu] = useState<{ key: string; x: number; y: number } | null>(null);
+  const [groupDialog, setGroupDialog] = useState<{ item?: LibraryItem } | null>(null);
+  const [groupTitle, setGroupTitle] = useState('');
+  const groupTitleInputRef = useRef<HTMLInputElement>(null);
   const contextItem = contextMenu ? props.items.find((item) => libraryItemKey(item.kind, item.id) === contextMenu.key) ?? null : null;
+  const selectedGroup = props.selectedGroupId ? props.groups.find((group) => group.id === props.selectedGroupId) ?? null : null;
+
+  useEffect(() => {
+    if (!groupDialog) {
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      groupTitleInputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [groupDialog]);
 
   useEffect(() => {
     if (!contextMenu) {
@@ -529,6 +565,41 @@ function LibraryPane(props: {
     setContextMenu(null);
   }
 
+  function createGroup() {
+    setGroupTitle('');
+    setGroupDialog({});
+  }
+
+  function createGroupAndAddContextItem() {
+    if (!contextItem) {
+      return;
+    }
+    setGroupTitle('');
+    setGroupDialog({ item: contextItem });
+    setContextMenu(null);
+  }
+
+  function submitGroupDialog(event: FormEvent) {
+    event.preventDefault();
+    const title = groupTitle.trim();
+    if (!title) {
+      return;
+    }
+    props.onCreateGroup(title, groupDialog?.item);
+    setGroupDialog(null);
+    setGroupTitle('');
+  }
+
+  function deleteSelectedGroup() {
+    if (!selectedGroup) {
+      return;
+    }
+    const confirmed = window.confirm(`删除分组「${selectedGroup.title}」？分组里的录音和笔记不会被删除。`);
+    if (confirmed) {
+      props.onDeleteGroup(selectedGroup.id);
+    }
+  }
+
   return (
     <section data-testid="library-pane" className="flex min-h-0 min-w-0 flex-col bg-background">
       <header className="flex h-14 items-center justify-between border-b border-border px-4">
@@ -540,12 +611,53 @@ function LibraryPane(props: {
           <Button variant="secondary" size="icon" title="New Note" aria-label="New Note" onClick={props.onCreateNote}>
             <Plus className="h-4 w-4" />
           </Button>
+          <Button variant="secondary" size="icon" title="New Group" aria-label="New Group" onClick={createGroup}>
+            <FolderPlus className="h-4 w-4" />
+          </Button>
           <Button variant="secondary" size="sm" onClick={props.onImport} disabled={props.importing}>
             <Upload className="h-4 w-4" />
             Import
           </Button>
         </div>
       </header>
+
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex items-center gap-2">
+          <button
+            data-testid="library-all-group"
+            title="All Library"
+            className={cn(
+              'h-8 rounded px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground',
+              !props.selectedGroupId && 'bg-muted text-foreground'
+            )}
+            onClick={() => props.onSelectGroup(null)}
+          >
+            All
+          </button>
+          <div className="stable-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            {props.groups.map((group) => (
+              <button
+                key={group.id}
+                data-testid="library-group-tab"
+                className={cn(
+                  'h-8 max-w-44 shrink-0 rounded px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground',
+                  group.id === props.selectedGroupId && 'bg-muted text-foreground'
+                )}
+                title={group.title}
+                onClick={() => props.onSelectGroup(group.id)}
+              >
+                <span className="inline-block max-w-28 truncate align-bottom">{group.title}</span>
+                <span className="ml-1 text-muted-foreground">{group.itemCount}</span>
+              </button>
+            ))}
+          </div>
+          {selectedGroup ? (
+            <Button size="icon" variant="ghost" title="Delete Group" onClick={deleteSelectedGroup}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
+      </div>
 
       {props.loading && props.items.length === 0 ? (
         <div className="px-4 py-5 text-sm text-muted-foreground">Loading library...</div>
@@ -577,10 +689,76 @@ function LibraryPane(props: {
               打开所在文件夹
             </button>
           ) : null}
+          {props.groups.length > 0 ? (
+            <div className="border-t border-border py-1">
+              <div className="px-3 py-1 text-xs font-medium text-muted-foreground">加入分组</div>
+              {props.groups.map((group) => (
+                <button
+                  key={group.id}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted"
+                  onClick={() => {
+                    props.onAddToGroup(group.id, contextItem);
+                    setContextMenu(null);
+                  }}
+                >
+                  <FolderPlus className="h-4 w-4" />
+                  <span className="min-w-0 truncate">{group.title}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <button className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted" onClick={createGroupAndAddContextItem}>
+            <FolderPlus className="h-4 w-4" />
+            新建分组
+          </button>
+          {props.selectedGroupId ? (
+            <button
+              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted"
+              onClick={() => {
+                props.onRemoveFromGroup(props.selectedGroupId ?? '', contextItem);
+                setContextMenu(null);
+              }}
+            >
+              <X className="h-4 w-4" />
+              从当前分组移除
+            </button>
+          ) : null}
           <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-destructive hover:bg-muted" onClick={deleteContextItem}>
             <Trash2 className="h-4 w-4" />
             删除
           </button>
+        </div>
+      ) : null}
+      {groupDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/15 px-4" onClick={() => setGroupDialog(null)}>
+          <form
+            data-testid="create-group-dialog"
+            className="w-full max-w-sm rounded border border-border bg-background p-4 shadow-lg"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={submitGroupDialog}
+          >
+            <h2 className="text-sm font-semibold">新建分组</h2>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {groupDialog.item ? '创建后会把当前项目加入这个分组。' : '分组只整理资料关系，不会移动或复制文件。'}
+            </p>
+            <Input
+              ref={groupTitleInputRef}
+              data-testid="create-group-title"
+              className="mt-3"
+              value={groupTitle}
+              placeholder="分组名称"
+              autoFocus
+              onChange={(event) => setGroupTitle(event.target.value)}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setGroupDialog(null)}>
+                取消
+              </Button>
+              <Button data-testid="create-group-confirm" type="submit" disabled={!groupTitle.trim()}>
+                创建
+              </Button>
+            </div>
+          </form>
         </div>
       ) : null}
     </section>
@@ -835,20 +1013,6 @@ function NoteDetailPane(props: {
       editor.off('blur', refreshToolbar);
     };
   }, [editor]);
-
-  useEffect(() => {
-    if (!editor || activeNoteId.current === note.id) {
-      return;
-    }
-
-    activeNoteId.current = note.id;
-    pendingSignature.current = null;
-    setTitle(note.title);
-    lastSavedSignature.current = noteSignature(note.title, note.contentJson, note.plainText);
-    setSaveState('saved');
-    editor.commands.setContent(toEditorContent(note.contentJson), { emitUpdate: false });
-    window.setTimeout(() => editor.commands.focus('end'), 0);
-  }, [editor, note.id, note.title, note.contentJson, note.plainText]);
 
   useEffect(() => {
     if (note.id !== activeNoteId.current) {
@@ -1175,7 +1339,8 @@ function RecordingDetailPane(props: {
   const transcript = recording.transcript;
   const transcriptionJob = getLatestTranscriptionJob(recording);
   const transcriptionError = transcriptionJob?.state === 'failed' ? transcriptionJob : null;
-  const isTranscribing = props.isTranscribing || transcriptionJob?.state === 'running';
+  const isTranscribing = props.isTranscribing || transcriptionJob?.state === 'pending' || transcriptionJob?.state === 'running';
+  const isTranscriptionQueued = transcriptionJob?.state === 'pending';
   const aiJob = getLatestAIJob(recording);
   const aiError = aiJob?.state === 'failed' ? aiJob : null;
   const isGeneratingArtifact = props.isGeneratingArtifact || aiJob?.state === 'running';
@@ -1215,7 +1380,7 @@ function RecordingDetailPane(props: {
             disabled={isTranscribing}
             title={recording.transcript ? 'Regenerate transcript' : 'Transcribe recording'}
           >
-            {isTranscribing ? 'Transcribing...' : recording.transcript ? 'Retranscribe' : 'Transcribe Recording'}
+            {isTranscriptionQueued ? 'Queued...' : isTranscribing ? 'Transcribing...' : recording.transcript ? 'Retranscribe' : 'Transcribe Recording'}
           </Button>
         </div>
         {transcriptionError ? (
@@ -1224,6 +1389,8 @@ function RecordingDetailPane(props: {
             disabled={props.isTranscribing}
             onRetry={() => props.onTranscribe(recording.id)}
           />
+        ) : isTranscriptionQueued ? (
+          <TranscriptionQueueNotice />
         ) : isTranscribing && transcriptionJob ? (
           <TranscriptionProgressNotice job={transcriptionJob} />
         ) : null}
@@ -1392,13 +1559,25 @@ function TranscriptionProgressNotice(props: { job: ProcessingJob }) {
   );
 }
 
+function TranscriptionQueueNotice() {
+  return (
+    <div className="mt-4 flex items-start gap-2 rounded border border-border bg-background px-3 py-3 text-sm">
+      <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+      <div className="min-w-0">
+        <div className="font-medium">Queued for transcription</div>
+        <p className="mt-1 leading-6 text-muted-foreground">前一条音频完成后会自动开始。队列会逐条使用 GPU，避免多个 medium 模型同时占满显存。</p>
+      </div>
+    </div>
+  );
+}
+
 function transcriptionProgressMessage(elapsedSeconds: number): string {
   if (elapsedSeconds >= 15 * 60) {
-    return '仍在运行超过 15 分钟。medium 在 CPU 上可能非常慢，建议切回 tiny/base 验证流程，或等待首次模型下载完成后重试。';
+    return '仍在运行超过 15 分钟。请保持应用开启；当前音频完成或失败后，队列会自动继续处理下一条。';
   }
 
   if (elapsedSeconds >= 5 * 60) {
-    return '仍在运行。small/medium 首次使用可能正在下载较大的模型；CPU 转写会明显慢于 tiny/base。';
+    return '仍在运行。small/medium 首次使用可能正在下载或加载模型；支持 CUDA 时会自动使用 GPU。';
   }
 
   if (elapsedSeconds >= 60) {
@@ -1742,9 +1921,9 @@ function SettingsPane(props: {
             <option value="faster-whisper-tiny">tiny · fastest</option>
             <option value="faster-whisper-base">base · light</option>
             <option value="faster-whisper-small">small · more accurate</option>
-            <option value="faster-whisper-medium">medium · slow on CPU</option>
+            <option value="faster-whisper-medium">medium · higher quality</option>
           </select>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">首次使用某个模型会下载/加载模型文件；短音频建议先用 tiny/base，medium 在 CPU 上可能非常慢。</p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">首次使用会下载/加载模型；支持 CUDA 时自动使用 NVIDIA GPU。批量音频会排队逐条转写，medium 在纯 CPU 上仍可能较慢。</p>
         </Field>
         <label className="flex items-center gap-3 text-sm">
           <input
